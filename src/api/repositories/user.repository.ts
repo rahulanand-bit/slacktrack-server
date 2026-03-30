@@ -1,4 +1,4 @@
-import { dbPool } from '../../config/db';
+import { prisma } from '../../config/prisma';
 import type { UserRecord } from './models';
 
 type CreateUserInput = {
@@ -8,126 +8,128 @@ type CreateUserInput = {
   isMessageEnabled?: boolean;
 };
 
-function mapUserRow(row: {
-  id: number;
-  slack_user_id: string;
-  display_name: string | null;
+function mapUserRecord(row: {
+  id: bigint;
+  slackUserId: string;
+  displayName: string | null;
   email: string | null;
-  is_message_enabled: boolean;
-  created_at: Date;
-  updated_at: Date;
+  isMessageEnabled: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 }): UserRecord {
   return {
-    id: row.id,
-    slackUserId: row.slack_user_id,
-    displayName: row.display_name,
+    id: Number(row.id),
+    slackUserId: row.slackUserId,
+    displayName: row.displayName,
     email: row.email,
-    isMessageEnabled: row.is_message_enabled,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    isMessageEnabled: row.isMessageEnabled,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
   };
 }
 
 export class UserRepository {
   async upsertBySlackId(slackUserId: string, displayName?: string): Promise<UserRecord> {
-    const result = await dbPool.query(
-      `
-      INSERT INTO users (slack_user_id, display_name)
-      VALUES ($1, $2)
-      ON CONFLICT (slack_user_id)
-      DO UPDATE SET
-        display_name = COALESCE(EXCLUDED.display_name, users.display_name),
-        updated_at = NOW()
-      RETURNING id, slack_user_id, display_name, email, is_message_enabled, created_at, updated_at
-      `,
-      [slackUserId, displayName || null]
-    );
+    const user = await prisma.user.upsert({
+      where: { slackUserId },
+      update: {
+        displayName: displayName ?? undefined,
+        updatedAt: new Date()
+      },
+      create: {
+        slackUserId,
+        displayName: displayName || null
+      }
+    });
 
-    return mapUserRow(result.rows[0]);
+    return mapUserRecord(user);
   }
 
   async createOrUpdateUser(input: CreateUserInput): Promise<UserRecord> {
-    const result = await dbPool.query(
-      `
-      INSERT INTO users (slack_user_id, display_name, email, is_message_enabled)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (slack_user_id)
-      DO UPDATE SET
-        display_name = EXCLUDED.display_name,
-        email = EXCLUDED.email,
-        is_message_enabled = EXCLUDED.is_message_enabled,
-        updated_at = NOW()
-      RETURNING id, slack_user_id, display_name, email, is_message_enabled, created_at, updated_at
-      `,
-      [
-        input.slackUserId,
-        input.displayName || null,
-        input.email || null,
-        input.isMessageEnabled ?? true
-      ]
-    );
+    const user = await prisma.user.upsert({
+      where: { slackUserId: input.slackUserId },
+      update: {
+        displayName: input.displayName || null,
+        email: input.email || null,
+        isMessageEnabled: input.isMessageEnabled ?? true,
+        updatedAt: new Date()
+      },
+      create: {
+        slackUserId: input.slackUserId,
+        displayName: input.displayName || null,
+        email: input.email || null,
+        isMessageEnabled: input.isMessageEnabled ?? true
+      }
+    });
 
-    return mapUserRow(result.rows[0]);
+    return mapUserRecord(user);
   }
 
   async setMessagingEnabled(slackUserId: string, isMessageEnabled: boolean): Promise<UserRecord | null> {
-    const result = await dbPool.query(
-      `
-      UPDATE users
-      SET is_message_enabled = $2,
-          updated_at = NOW()
-      WHERE slack_user_id = $1
-      RETURNING id, slack_user_id, display_name, email, is_message_enabled, created_at, updated_at
-      `,
-      [slackUserId, isMessageEnabled]
-    );
+    const user = await prisma.user.findUnique({ where: { slackUserId } });
+    if (!user) return null;
 
-    if (result.rowCount === 0) return null;
-    return mapUserRow(result.rows[0]);
+    const updated = await prisma.user.update({
+      where: { slackUserId },
+      data: {
+        isMessageEnabled,
+        updatedAt: new Date()
+      }
+    });
+
+    return mapUserRecord(updated);
+  }
+
+  async updateUserBySlackId(
+    slackUserId: string,
+    input: { displayName?: string | null; email?: string | null; isMessageEnabled?: boolean }
+  ): Promise<UserRecord | null> {
+    const user = await prisma.user.findUnique({ where: { slackUserId } });
+    if (!user) return null;
+
+    const updated = await prisma.user.update({
+      where: { slackUserId },
+      data: {
+        displayName: input.displayName ?? user.displayName,
+        email: input.email ?? user.email,
+        isMessageEnabled: input.isMessageEnabled ?? user.isMessageEnabled,
+        updatedAt: new Date()
+      }
+    });
+
+    return mapUserRecord(updated);
   }
 
   async findBySlackId(slackUserId: string): Promise<UserRecord | null> {
-    const result = await dbPool.query(
-      `
-      SELECT id, slack_user_id, display_name, email, is_message_enabled, created_at, updated_at
-      FROM users
-      WHERE slack_user_id = $1
-      LIMIT 1
-      `,
-      [slackUserId]
-    );
-
-    if (result.rowCount === 0) return null;
-    return mapUserRow(result.rows[0]);
+    const user = await prisma.user.findUnique({ where: { slackUserId } });
+    if (!user) return null;
+    return mapUserRecord(user);
   }
 
   async listAllSlackUserIds(): Promise<string[]> {
-    const result = await dbPool.query(`SELECT slack_user_id FROM users ORDER BY id ASC`);
-    return result.rows.map((row) => String(row.slack_user_id));
+    const users = await prisma.user.findMany({
+      orderBy: { id: 'asc' },
+      select: { slackUserId: true }
+    });
+
+    return users.map((row) => row.slackUserId);
   }
 
   async listMessageEnabledSlackUserIds(): Promise<string[]> {
-    const result = await dbPool.query(
-      `
-      SELECT slack_user_id
-      FROM users
-      WHERE is_message_enabled = TRUE
-      ORDER BY id ASC
-      `
-    );
+    const users = await prisma.user.findMany({
+      where: { isMessageEnabled: true },
+      orderBy: { id: 'asc' },
+      select: { slackUserId: true }
+    });
 
-    return result.rows.map((row) => String(row.slack_user_id));
+    return users.map((row) => row.slackUserId);
   }
 
   async listUsers(): Promise<UserRecord[]> {
-    const result = await dbPool.query(
-      `
-      SELECT id, slack_user_id, display_name, email, is_message_enabled, created_at, updated_at
-      FROM users
-      ORDER BY COALESCE(display_name, slack_user_id) ASC
-      `
-    );
+    const users = await prisma.user.findMany({
+      orderBy: [{ displayName: 'asc' }, { slackUserId: 'asc' }]
+    });
 
-    return result.rows.map((row) => mapUserRow(row));
+    return users.map((row) => mapUserRecord(row));
   }
 }

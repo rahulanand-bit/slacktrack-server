@@ -1,20 +1,6 @@
 import type { Request, Response } from 'express';
-import { z } from 'zod';
+import { createProjectSchema, updateProjectSchema } from '../schemas/project-catalog.schema';
 import type { ProjectCatalogService } from '../services/project-catalog.service';
-
-const createProjectSchema = z.object({
-  name: z.string().trim().min(1),
-  active: z.boolean().optional()
-});
-
-const updateProjectSchema = z
-  .object({
-    name: z.string().trim().min(1).optional(),
-    active: z.boolean().optional()
-  })
-  .refine((value) => value.name !== undefined || value.active !== undefined, {
-    message: 'At least one field (name or active) must be provided'
-  });
 
 export class ProjectCatalogController {
   constructor(private readonly projectCatalogService: ProjectCatalogService) {}
@@ -45,5 +31,21 @@ export class ProjectCatalogController {
     }
 
     res.status(200).json({ ok: true, data: project });
+  }
+
+  async deleteProject(req: Request, res: Response): Promise<void> {
+    const projectId = Number(req.params.id);
+    if (!Number.isFinite(projectId) || projectId <= 0) {
+      res.status(400).json({ ok: false, error: 'Invalid project id' });
+      return;
+    }
+
+    const deleted = await this.projectCatalogService.deleteProject(projectId);
+    if (!deleted) {
+      res.status(404).json({ ok: false, error: 'Project not found' });
+      return;
+    }
+
+    res.status(200).json({ ok: true });
   }
 }

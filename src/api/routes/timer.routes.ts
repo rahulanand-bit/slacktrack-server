@@ -21,5 +21,10 @@ export function createTimerRouter(controller: TimerController): Router {
     requirePermission('timers:write'),
     asyncHandler(controller.deleteTimer.bind(controller))
   );
+  router.post(
+    '/timers/trigger-attendance',
+    requirePermission('timers:write'),
+    asyncHandler(controller.triggerAttendanceReminder.bind(controller))
+  );
   return router;
 }

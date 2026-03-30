@@ -1,4 +1,5 @@
-import { dbPool } from '../config/db';
+import { UserRepository } from '../api/repositories/user.repository';
+import { prisma } from '../config/prisma';
 import { slackUserNotificationSeed } from '../config/slack-user-notification.seed';
 import { logger } from '../config/logger';
 
@@ -28,20 +29,15 @@ function buildSeedUsers(): SeedUser[] {
 
 async function seed(): Promise<void> {
   const users = buildSeedUsers();
+  const userRepository = new UserRepository();
+
   for (const user of users) {
-    await dbPool.query(
-      `
-      INSERT INTO users (slack_user_id, display_name, email, is_message_enabled)
-      VALUES ($1, $2, $3, $4)
-      ON CONFLICT (slack_user_id)
-      DO UPDATE SET
-        display_name = EXCLUDED.display_name,
-        email = EXCLUDED.email,
-        is_message_enabled = EXCLUDED.is_message_enabled,
-        updated_at = NOW()
-      `,
-      [user.slackUserId, user.displayName, user.email, user.isMessageEnabled]
-    );
+    await userRepository.createOrUpdateUser({
+      slackUserId: user.slackUserId,
+      displayName: user.displayName,
+      email: user.email,
+      isMessageEnabled: user.isMessageEnabled
+    });
   }
 
   logger.info({ count: users.length }, 'Seeded test users');
@@ -53,5 +49,5 @@ void seed()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await dbPool.end();
+    await prisma.$disconnect();
   });

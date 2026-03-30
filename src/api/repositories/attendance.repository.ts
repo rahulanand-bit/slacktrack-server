@@ -1,4 +1,6 @@
-import { dbPool } from '../../config/db';
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../config/prisma';
+import { dateToYmd, ymdToDate } from '../../utils/date-ymd';
 import type {
   AttendanceProjectSnapshotRow,
   AttendanceRecord,
@@ -6,122 +8,159 @@ import type {
   ProjectEntryRecord
 } from './models';
 
+function mapAttendance(row: {
+  id: bigint;
+  userId: bigint;
+  dateYmd: Date;
+  status: string;
+  updatedAt: Date;
+}): AttendanceRecord {
+  return {
+    id: Number(row.id),
+    userId: Number(row.userId),
+    dateYmd: dateToYmd(row.dateYmd),
+    status: row.status as AttendanceValue,
+    updatedAt: row.updatedAt
+  };
+}
+
+function mapProjectEntry(row: {
+  id: bigint;
+  userId: bigint;
+  dateYmd: Date;
+  slotIndex: number;
+  projectName: string;
+}): ProjectEntryRecord {
+  return {
+    id: Number(row.id),
+    userId: Number(row.userId),
+    dateYmd: dateToYmd(row.dateYmd),
+    slotIndex: row.slotIndex,
+    projectName: row.projectName
+  };
+}
+
 export class AttendanceRepository {
   async upsertAttendance(userId: number, dateYmd: string, status: AttendanceValue): Promise<AttendanceRecord> {
-    const result = await dbPool.query(
-      `
-      INSERT INTO attendance_entries (user_id, date_ymd, status)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (user_id, date_ymd)
-      DO UPDATE SET
-        status = EXCLUDED.status,
-        updated_at = NOW()
-      RETURNING id, user_id, date_ymd, status, updated_at
-      `,
-      [userId, dateYmd, status]
-    );
+    const row = await prisma.attendanceEntry.upsert({
+      where: {
+        userId_dateYmd: {
+          userId: BigInt(userId),
+          dateYmd: ymdToDate(dateYmd)
+        }
+      },
+      update: {
+        status,
+        updatedAt: new Date()
+      },
+      create: {
+        userId: BigInt(userId),
+        dateYmd: ymdToDate(dateYmd),
+        status
+      }
+    });
 
-    const row = result.rows[0];
-    return {
-      id: row.id,
-      userId: row.user_id,
-      dateYmd: row.date_ymd,
-      status: row.status,
-      updatedAt: row.updated_at
-    };
+    return mapAttendance(row);
   }
 
   async replaceProjects(userId: number, dateYmd: string, projects: string[]): Promise<ProjectEntryRecord[]> {
-    await dbPool.query(`DELETE FROM project_entries WHERE user_id = $1 AND date_ymd = $2`, [userId, dateYmd]);
+    const targetDate = ymdToDate(dateYmd);
 
-    if (!projects.length) return [];
-
-    const inserts: ProjectEntryRecord[] = [];
-    for (let i = 0; i < projects.length; i++) {
-      const result = await dbPool.query(
-        `
-        INSERT INTO project_entries (user_id, date_ymd, slot_index, project_name)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, user_id, date_ymd, slot_index, project_name
-        `,
-        [userId, dateYmd, i + 1, projects[i]]
-      );
-      const row = result.rows[0];
-      inserts.push({
-        id: row.id,
-        userId: row.user_id,
-        dateYmd: row.date_ymd,
-        slotIndex: row.slot_index,
-        projectName: row.project_name
+    await prisma.$transaction(async (tx) => {
+      await tx.projectEntry.deleteMany({
+        where: {
+          userId: BigInt(userId),
+          dateYmd: targetDate
+        }
       });
-    }
 
-    return inserts;
+      if (projects.length > 0) {
+        await tx.projectEntry.createMany({
+          data: projects.map((projectName, index) => ({
+            userId: BigInt(userId),
+            dateYmd: targetDate,
+            slotIndex: index + 1,
+            projectName
+          }))
+        });
+      }
+    });
+
+    const inserted = await prisma.projectEntry.findMany({
+      where: {
+        userId: BigInt(userId),
+        dateYmd: targetDate
+      },
+      orderBy: { slotIndex: 'asc' }
+    });
+
+    return inserted.map((row) => mapProjectEntry(row));
   }
 
   async hasAttendanceForDate(userId: number, dateYmd: string): Promise<boolean> {
-    const result = await dbPool.query(
-      `
-      SELECT 1
-      FROM attendance_entries
-      WHERE user_id = $1 AND date_ymd = $2
-      LIMIT 1
-      `,
-      [userId, dateYmd]
-    );
-    return (result.rowCount ?? 0) > 0;
+    const count = await prisma.attendanceEntry.count({
+      where: {
+        userId: BigInt(userId),
+        dateYmd: ymdToDate(dateYmd)
+      }
+    });
+
+    return count > 0;
   }
 
   async getAttendanceForDate(userId: number, dateYmd: string): Promise<AttendanceValue | null> {
-    const result = await dbPool.query(
-      `
-      SELECT status
-      FROM attendance_entries
-      WHERE user_id = $1 AND date_ymd = $2
-      LIMIT 1
-      `,
-      [userId, dateYmd]
-    );
+    const row = await prisma.attendanceEntry.findUnique({
+      where: {
+        userId_dateYmd: {
+          userId: BigInt(userId),
+          dateYmd: ymdToDate(dateYmd)
+        }
+      },
+      select: { status: true }
+    });
 
-    if ((result.rowCount ?? 0) === 0) return null;
-    return String(result.rows[0].status) as AttendanceValue;
+    if (!row) return null;
+    return row.status as AttendanceValue;
   }
 
   async hasProjectsForDate(userId: number, dateYmd: string): Promise<boolean> {
-    const result = await dbPool.query(
-      `
-      SELECT 1
-      FROM project_entries
-      WHERE user_id = $1 AND date_ymd = $2
-      LIMIT 1
-      `,
-      [userId, dateYmd]
-    );
+    const count = await prisma.projectEntry.count({
+      where: {
+        userId: BigInt(userId),
+        dateYmd: ymdToDate(dateYmd)
+      }
+    });
 
-    return (result.rowCount ?? 0) > 0;
+    return count > 0;
   }
 
   async getProjectsForDate(userId: number, dateYmd: string): Promise<string[]> {
-    const result = await dbPool.query(
-      `
-      SELECT project_name
-      FROM project_entries
-      WHERE user_id = $1 AND date_ymd = $2
-      ORDER BY slot_index ASC
-      `,
-      [userId, dateYmd]
-    );
+    const rows = await prisma.projectEntry.findMany({
+      where: {
+        userId: BigInt(userId),
+        dateYmd: ymdToDate(dateYmd)
+      },
+      orderBy: { slotIndex: 'asc' },
+      select: { projectName: true }
+    });
 
-    return result.rows.map((row) => String(row.project_name));
+    return rows.map((row) => row.projectName);
   }
 
   async listSnapshotRows(fromDateYmd: string, toDateYmd: string): Promise<AttendanceProjectSnapshotRow[]> {
-    const result = await dbPool.query(
-      `
+    const rows = await prisma.$queryRaw<
+      Array<{
+        slack_user_id: string;
+        display_name: string | null;
+        date_ymd: Date;
+        status: string | null;
+        projects: string[];
+      }>
+    >(Prisma.sql`
       WITH attendance_cte AS (
         SELECT user_id, date_ymd, status
         FROM attendance_entries
-        WHERE date_ymd BETWEEN $1::date AND $2::date
+        WHERE date_ymd BETWEEN ${ymdToDate(fromDateYmd)}::date AND ${ymdToDate(toDateYmd)}::date
       ),
       project_cte AS (
         SELECT
@@ -129,7 +168,7 @@ export class AttendanceRepository {
           date_ymd,
           ARRAY_AGG(project_name ORDER BY slot_index ASC) AS projects
         FROM project_entries
-        WHERE date_ymd BETWEEN $1::date AND $2::date
+        WHERE date_ymd BETWEEN ${ymdToDate(fromDateYmd)}::date AND ${ymdToDate(toDateYmd)}::date
         GROUP BY user_id, date_ymd
       ),
       merged AS (
@@ -152,16 +191,14 @@ export class AttendanceRepository {
       FROM merged
       INNER JOIN users u ON u.id = merged.user_id
       ORDER BY merged.date_ymd ASC, u.slack_user_id ASC
-      `,
-      [fromDateYmd, toDateYmd]
-    );
+    `);
 
-    return result.rows.map((row) => ({
-      slackUserId: String(row.slack_user_id),
-      displayName: row.display_name ? String(row.display_name) : null,
-      dateYmd: String(row.date_ymd).slice(0, 10),
-      status: (row.status ? String(row.status) : null) as AttendanceValue | null,
-      projects: Array.isArray(row.projects) ? row.projects.map((value: unknown) => String(value)) : []
+    return rows.map((row) => ({
+      slackUserId: row.slack_user_id,
+      displayName: row.display_name,
+      dateYmd: dateToYmd(new Date(row.date_ymd)),
+      status: (row.status as AttendanceValue | null) ?? null,
+      projects: Array.isArray(row.projects) ? row.projects.map((value) => String(value)) : []
     }));
   }
 }

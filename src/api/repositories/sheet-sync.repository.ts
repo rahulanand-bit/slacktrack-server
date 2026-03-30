@@ -1,4 +1,4 @@
-import { dbPool } from '../../config/db';
+import { prisma } from '../../config/prisma';
 
 export type SheetSyncState = {
   syncKey: string;
@@ -9,38 +9,30 @@ export type SheetSyncState = {
 
 export class SheetSyncRepository {
   async getState(syncKey: string): Promise<SheetSyncState | null> {
-    const result = await dbPool.query(
-      `
-      SELECT sync_key, db_hash, sheet_hash, updated_at
-      FROM sheet_sync_state
-      WHERE sync_key = $1
-      LIMIT 1
-      `,
-      [syncKey]
-    );
+    const row = await prisma.sheetSyncState.findUnique({ where: { syncKey } });
+    if (!row) return null;
 
-    if ((result.rowCount ?? 0) === 0) return null;
-    const row = result.rows[0];
     return {
-      syncKey: String(row.sync_key),
-      dbHash: String(row.db_hash),
-      sheetHash: String(row.sheet_hash),
-      updatedAt: row.updated_at as Date
+      syncKey: row.syncKey,
+      dbHash: row.dbHash,
+      sheetHash: row.sheetHash,
+      updatedAt: row.updatedAt
     };
   }
 
   async upsertState(syncKey: string, dbHash: string, sheetHash: string): Promise<void> {
-    await dbPool.query(
-      `
-      INSERT INTO sheet_sync_state (sync_key, db_hash, sheet_hash)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (sync_key)
-      DO UPDATE SET
-        db_hash = EXCLUDED.db_hash,
-        sheet_hash = EXCLUDED.sheet_hash,
-        updated_at = NOW()
-      `,
-      [syncKey, dbHash, sheetHash]
-    );
+    await prisma.sheetSyncState.upsert({
+      where: { syncKey },
+      update: {
+        dbHash,
+        sheetHash,
+        updatedAt: new Date()
+      },
+      create: {
+        syncKey,
+        dbHash,
+        sheetHash
+      }
+    });
   }
 }

@@ -13,6 +13,11 @@ export function createProjectRouter(controller: ProjectCatalogController): Route
     requirePermission('projects:write'),
     asyncHandler(controller.updateProject.bind(controller))
   );
+  router.delete(
+    '/projects/:id',
+    requirePermission('projects:write'),
+    asyncHandler(controller.deleteProject.bind(controller))
+  );
 
   return router;
 }

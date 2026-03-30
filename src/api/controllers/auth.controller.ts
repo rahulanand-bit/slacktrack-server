@@ -1,17 +1,6 @@
 import type { Request, Response } from 'express';
-import { z } from 'zod';
+import { createAdminUserSchema, loginSchema } from '../schemas/auth.schema';
 import type { AuthService } from '../services/auth.service';
-
-const loginSchema = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(8)
-});
-
-const createAdminUserSchema = z.object({
-  email: z.string().trim().email(),
-  password: z.string().min(8),
-  role: z.enum(['admin', 'hr', 'manager'])
-});
 
 export class AuthController {
   constructor(private readonly authService: AuthService) {}

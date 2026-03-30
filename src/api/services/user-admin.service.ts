@@ -24,6 +24,25 @@ export class UserAdminService {
     });
   }
 
+  async createUsersBulk(inputs: CreateUserInput[]): Promise<UserRecord[]> {
+    return Promise.all(inputs.map((input) => this.createUser(input)));
+  }
+
+  async updateUser(
+    slackUserId: string,
+    input: { name?: string; email?: string | null; isMessageEnabled?: boolean }
+  ): Promise<UserRecord | null> {
+    return this.userRepository.updateUserBySlackId(slackUserId, {
+      displayName: input.name,
+      email: input.email,
+      isMessageEnabled: input.isMessageEnabled
+    });
+  }
+
+  async setMessagingEnabled(slackUserId: string, isMessageEnabled: boolean): Promise<UserRecord | null> {
+    return this.userRepository.setMessagingEnabled(slackUserId, isMessageEnabled);
+  }
+
   async deactivateMessaging(slackUserId: string): Promise<UserRecord | null> {
     return this.userRepository.setMessagingEnabled(slackUserId, false);
   }

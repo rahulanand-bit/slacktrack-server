@@ -1,93 +1,76 @@
-import { dbPool } from '../../config/db';
+import { prisma } from '../../config/prisma';
 import type { ProjectCatalogRecord } from './models';
 
-function mapProjectRow(row: {
-  id: number;
+function mapProject(row: {
+  id: bigint;
   name: string;
   active: boolean;
-  created_at: Date;
-  updated_at: Date;
+  createdAt: Date;
+  updatedAt: Date;
 }): ProjectCatalogRecord {
   return {
-    id: row.id,
+    id: Number(row.id),
     name: row.name,
     active: row.active,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt
   };
 }
 
 export class ProjectCatalogRepository {
   async listProjects(): Promise<ProjectCatalogRecord[]> {
-    const result = await dbPool.query(
-      `
-      SELECT id, name, active, created_at, updated_at
-      FROM projects
-      ORDER BY LOWER(name) ASC
-      `
-    );
+    const rows = await prisma.project.findMany({
+      orderBy: [{ name: 'asc' }]
+    });
 
-    return result.rows.map((row) => mapProjectRow(row));
+    return rows.map((row) => mapProject(row));
   }
 
   async listActiveProjects(): Promise<ProjectCatalogRecord[]> {
-    const result = await dbPool.query(
-      `
-      SELECT id, name, active, created_at, updated_at
-      FROM projects
-      WHERE active = TRUE
-      ORDER BY LOWER(name) ASC
-      `
-    );
+    const rows = await prisma.project.findMany({
+      where: { active: true },
+      orderBy: [{ name: 'asc' }]
+    });
 
-    return result.rows.map((row) => mapProjectRow(row));
+    return rows.map((row) => mapProject(row));
   }
 
   async createProject(name: string, active: boolean): Promise<ProjectCatalogRecord> {
-    const result = await dbPool.query(
-      `
-      INSERT INTO projects (name, active)
-      VALUES ($1, $2)
-      ON CONFLICT (name)
-      DO UPDATE SET
-        active = EXCLUDED.active,
-        updated_at = NOW()
-      RETURNING id, name, active, created_at, updated_at
-      `,
-      [name, active]
-    );
+    const row = await prisma.project.upsert({
+      where: { name },
+      update: {
+        active,
+        updatedAt: new Date()
+      },
+      create: {
+        name,
+        active
+      }
+    });
 
-    return mapProjectRow(result.rows[0]);
+    return mapProject(row);
   }
 
   async updateProject(id: number, input: { name?: string; active?: boolean }): Promise<ProjectCatalogRecord | null> {
-    const updates: string[] = [];
-    const values: Array<string | boolean | number> = [id];
+    if (input.name === undefined && input.active === undefined) return null;
 
-    if (input.name !== undefined) {
-      values.push(input.name);
-      updates.push(`name = $${values.length}`);
-    }
+    const existing = await prisma.project.findUnique({ where: { id: BigInt(id) } });
+    if (!existing) return null;
 
-    if (input.active !== undefined) {
-      values.push(input.active);
-      updates.push(`active = $${values.length}`);
-    }
+    const updated = await prisma.project.update({
+      where: { id: BigInt(id) },
+      data: {
+        name: input.name ?? existing.name,
+        active: input.active ?? existing.active,
+        updatedAt: new Date()
+      }
+    });
 
-    if (updates.length === 0) return null;
+    return mapProject(updated);
+  }
 
-    const result = await dbPool.query(
-      `
-      UPDATE projects
-      SET ${updates.join(', ')},
-          updated_at = NOW()
-      WHERE id = $1
-      RETURNING id, name, active, created_at, updated_at
-      `,
-      values
-    );
-
-    if (result.rowCount === 0) return null;
-    return mapProjectRow(result.rows[0]);
+  async deleteProject(id: number): Promise<boolean> {
+    const deleted = await prisma.project.deleteMany({ where: { id: BigInt(id) } });
+    return deleted.count > 0;
   }
 }

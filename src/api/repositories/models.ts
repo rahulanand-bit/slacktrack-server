@@ -1,6 +1,6 @@
 export type AttendanceValue = 'WFO' | 'WFH' | '-1' | '-0.5';
 
-export type AdminRole = 'admin' | 'hr' | 'manager';
+export type AdminRole = 'admin' | 'hr' | 'manager' | 'analytics';
 
 export type UserRecord = {
   id: number;

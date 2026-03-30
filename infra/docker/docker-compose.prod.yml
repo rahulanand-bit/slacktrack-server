@@ -1,0 +1,71 @@
+services:
+  migrate:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.prod
+      target: builder
+    env_file:
+      - ../../.env
+    depends_on:
+      - postgres
+      - redis
+    command: npm run prisma:migrate:deploy
+    restart: "no"
+
+  api:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.prod
+      target: runner
+    env_file:
+      - ../../.env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    command: npm run start
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../../
+      dockerfile: infra/docker/Dockerfile.prod
+      target: runner
+    env_file:
+      - ../../.env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+    command: npm run worker
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-slacktrack}
+      POSTGRES_USER: ${POSTGRES_USER:-slacktrack}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-slacktrack}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:

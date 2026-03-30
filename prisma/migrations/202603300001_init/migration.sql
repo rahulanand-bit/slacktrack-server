@@ -8,9 +8,6 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
-ALTER TABLE users ADD COLUMN IF NOT EXISTS is_message_enabled BOOLEAN NOT NULL DEFAULT TRUE;
-
 CREATE TABLE IF NOT EXISTS attendance_entries (
   id BIGSERIAL PRIMARY KEY,
   user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -80,11 +77,6 @@ CREATE TABLE IF NOT EXISTS admin_users (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-ALTER TABLE admin_users DROP CONSTRAINT IF EXISTS admin_users_role_check;
-ALTER TABLE admin_users
-  ADD CONSTRAINT admin_users_role_check
-  CHECK (role IN ('admin', 'hr', 'manager', 'analytics'));
-
 CREATE TABLE IF NOT EXISTS admin_sessions (
   id BIGSERIAL PRIMARY KEY,
   admin_user_id BIGINT NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
@@ -96,23 +88,3 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
 
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_user_id ON admin_sessions(admin_user_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
-
-INSERT INTO holidays (date_ymd, holiday_name)
-VALUES
-  ('2026-01-01', 'New Year''s Day'),
-  ('2026-01-26', 'Republic Day'),
-  ('2026-03-04', 'Holiday 1'),
-  ('2026-03-19', 'Holiday 2'),
-  ('2026-04-03', 'Holiday 3'),
-  ('2026-09-14', 'Holiday 4'),
-  ('2026-10-02', 'Gandhi Jayanti'),
-  ('2026-10-20', 'Holiday 5'),
-  ('2026-11-09', 'Holiday 6'),
-  ('2026-12-25', 'Christmas')
-ON CONFLICT (date_ymd) DO NOTHING;
-
-INSERT INTO reminder_timers (name, timer_type, cron_expression, timezone, active)
-VALUES
-  ('Morning Reminder', 'morning', '0 9 * * *', 'Asia/Kolkata', TRUE),
-  ('Evening Reminder', 'evening', '0 17 * * *', 'Asia/Kolkata', TRUE)
-ON CONFLICT DO NOTHING;

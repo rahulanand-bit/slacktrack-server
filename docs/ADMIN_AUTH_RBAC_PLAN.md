@@ -2,7 +2,7 @@
 
 ## Goal
 
-Move admin access from static API-key usage to login-based authentication (`email + password`) with role-based permissions for HR and managers.
+Move admin access from static API-key usage to login-based authentication (`email + password`) with role-based permissions for Admin, HR, Manager, and Analytics roles.
 
 ## Current State
 
@@ -37,6 +37,10 @@ Move admin access from static API-key usage to login-based authentication (`emai
 - `timers:read`
 - `sync:read`
 
+### `analytics`
+- `users:read`
+- `attendance:read`
+
 ## Proposed API Contracts
 
 1. `POST /api/admin/auth/login`
@@ -53,7 +57,7 @@ Move admin access from static API-key usage to login-based authentication (`emai
 - `id`
 - `email` (unique)
 - `password_hash`
-- `role` (`hr` | `manager` | `superadmin` optional)
+- `role` (`admin` | `hr` | `manager` | `analytics`)
 - `active`
 - `created_at`, `updated_at`
 

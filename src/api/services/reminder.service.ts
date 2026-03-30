@@ -67,6 +67,43 @@ export class ReminderService {
     }
   }
 
+  async sendManualAttendanceReminder(slackUserIds?: string[]): Promise<number> {
+    const dateYmd = DateTime.now().setZone(env.TIMEZONE).toFormat('yyyy-LL-dd');
+
+    const selectedRecipients = Array.isArray(slackUserIds)
+      ? Array.from(new Set(slackUserIds.map((id) => id.trim()).filter(Boolean)))
+      : [];
+
+    const recipients =
+      selectedRecipients.length > 0
+        ? selectedRecipients
+        : await this.resolveRecipientsWithoutAttendance(dateYmd);
+
+    for (const recipient of recipients) {
+      await this.slackApiService.sendAttendanceActions(recipient);
+    }
+
+    return recipients.length;
+  }
+
+  private async resolveRecipientsWithoutAttendance(dateYmd: string): Promise<string[]> {
+    const allRecipients = await this.resolveReminderRecipients();
+
+    const checks = await Promise.all(
+      allRecipients.map(async (slackUserId) => {
+        const user = await this.userRepository.findBySlackId(slackUserId);
+        if (!user) {
+          return slackUserId;
+        }
+
+        const hasAttendance = await this.attendanceRepository.hasAttendanceForDate(user.id, dateYmd);
+        return hasAttendance ? null : slackUserId;
+      })
+    );
+
+    return checks.filter((value): value is string => Boolean(value));
+  }
+
   private async resolveReminderRecipients(): Promise<string[]> {
     const messageEnabledUsers = await this.userRepository.listMessageEnabledSlackUserIds();
     if (messageEnabledUsers.length) return messageEnabledUsers;

@@ -38,6 +38,15 @@ export class ProjectCatalogService {
     return updated;
   }
 
+  async deleteProject(id: number): Promise<boolean> {
+    const deleted = await this.projectCatalogRepository.deleteProject(id);
+    if (deleted) {
+      await this.invalidateActiveProjectsCache();
+    }
+
+    return deleted;
+  }
+
   async listActiveProjectNames(): Promise<string[]> {
     try {
       const cached = await this.redis.get(ACTIVE_PROJECTS_CACHE_KEY);

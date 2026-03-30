@@ -1,14 +1,14 @@
 import { z } from 'zod';
 import { AdminAuthRepository } from '../api/repositories/admin-auth.repository';
 import type { AdminRole } from '../api/repositories/models';
-import { dbPool } from '../config/db';
 import { logger } from '../config/logger';
+import { prisma } from '../config/prisma';
 import { hashPassword } from '../utils/password';
 
 const inputSchema = z.object({
   ADMIN_SEED_EMAIL: z.string().email(),
   ADMIN_SEED_PASSWORD: z.string().min(8),
-  ADMIN_SEED_ROLE: z.enum(['admin', 'hr', 'manager']).default('admin')
+  ADMIN_SEED_ROLE: z.enum(['admin', 'hr', 'manager', 'analytics']).default('admin')
 });
 
 async function seedAdmin(): Promise<void> {
@@ -31,5 +31,5 @@ void seedAdmin()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await dbPool.end();
+    await prisma.$disconnect();
   });

@@ -7,12 +7,12 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().default(8080),
 
-  POSTGRES_HOST: z.string().default('localhost'),
+  POSTGRES_HOST: z.string().default('postgres'),
   POSTGRES_PORT: z.coerce.number().default(5432),
   POSTGRES_DB: z.string().default('slacktrack'),
   POSTGRES_USER: z.string().default('slacktrack'),
   POSTGRES_PASSWORD: z.string().default('slacktrack'),
-  DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: z.string().url(),
 
   REDIS_HOST: z.string().default('localhost'),
   REDIS_PORT: z.coerce.number().default(6379),

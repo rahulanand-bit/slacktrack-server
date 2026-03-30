@@ -205,13 +205,11 @@ export class SlackApiService {
 
     const buttonStyle = (actionId: string): string | undefined => {
       if (!selected || failed) {
-        if (actionId === 'wfo') return 'primary';
-        if (actionId === 'leave_full') return 'danger';
         return undefined;
       }
 
       if (selected === actionId) {
-        if (actionId === 'leave_full') return 'danger';
+        if (actionId === 'leave_full' || actionId === 'leave_half') return 'danger';
         return 'primary';
       }
 

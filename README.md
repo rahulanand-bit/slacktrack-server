@@ -11,7 +11,7 @@ Detailed setup guides:
 
 ## Local Development (Docker)
 
-1. Copy `.env.example` to `.env` and fill required Slack values.
+1. Copy `.env.example` (or `.env.sample`) to `.env` and fill required Slack values.
 2. Start services:
 
 ```bash
@@ -24,8 +24,24 @@ This starts:
 - PostgreSQL
 - Redis (BullMQ backend)
 
+## Production Docker
+
+- Production Dockerfile: `infra/docker/Dockerfile.prod`
+- Production compose: `infra/docker/docker-compose.prod.yml`
+
+Run production stack:
+
+```bash
+docker compose -f infra/docker/docker-compose.prod.yml up -d --build
+```
+
 API docs:
 - Swagger UI: `http://localhost:8080/docs`
+
+Backend schemas:
+
+- Prisma DB schema: `prisma/schema.prisma`
+- Request validation schemas (Zod): `src/api/schemas/*.schema.ts`
 
 ## End-to-End Project Setup
 
@@ -60,28 +76,59 @@ docker compose -f infra/docker/docker-compose.yml up --build
 
 Set `ADMIN_UI_ORIGIN` in `.env` if your admin frontend runs on a different host/port than `http://localhost:5173`.
 
-6. Seed users
+Note: Docker Compose startup now runs `npm install` and `prisma generate` automatically in `api` and `worker` containers.
+
+6. Run database migration (Prisma)
+
+If running on host:
+
+```bash
+npm run prisma:generate
+npm run prisma:migrate
+```
+
+If running with Docker Compose (recommended):
+
+```bash
+docker compose -f infra/docker/docker-compose.yml exec api npm run prisma:generate
+docker compose -f infra/docker/docker-compose.yml exec api npm run prisma:migrate
+```
+
+Optional DB browser:
+
+```bash
+npm run prisma:studio
+```
+
+7. Seed users
 
 ```bash
 docker compose -f infra/docker/docker-compose.yml exec api npm run seed:test-users
 ```
 
-7. Verify health
+7a. Seed projects catalog
+
+```bash
+docker compose -f infra/docker/docker-compose.yml exec api npm run seed:projects
+```
+
+8. Verify health
 
 ```bash
 curl http://localhost:8080/api/health
 ```
 
-8. Trigger sheet sync once
+9. Trigger sheet sync once
 
 ```bash
 curl -X POST http://localhost:8080/api/admin/sync/reconcile \
   -H "Authorization: Bearer <generated-token>"
 ```
 
-9. Test reminder delivery
+10. Test reminder delivery
    - Add/confirm a user with `POST /api/admin/users`
-   - Create a quick timer with `POST /api/admin/timers` (for example `*/1 * * * *`)
+   - Create a quick timer with `POST /api/admin/timers` using `time` (for example `09:30`)
+   - Backend converts `time` to cron expression.
    - Keep API + worker running and verify DM in Slack
 
 ## Key API Endpoints
@@ -92,17 +139,26 @@ curl -X POST http://localhost:8080/api/admin/sync/reconcile \
 - `POST /api/admin/auth/admin-users`
 - `POST /api/admin/auth/logout`
 - `GET /api/admin/auth/me`
+- `GET /api/admin/dashboard/summary`
 - `GET /api/admin/projects`
 - `POST /api/admin/projects`
 - `PATCH /api/admin/projects/:id`
+- `DELETE /api/admin/projects/:id`
+- `GET /api/admin/attendance`
+- `GET /api/admin/attendance/month`
+- `GET /api/admin/attendance/users/:slackUserId/month`
 - `GET /api/admin/timers`
 - `POST /api/admin/timers`
+- `POST /api/admin/timers/trigger-attendance`
 - `PATCH /api/admin/timers/:id`
 - `DELETE /api/admin/timers/:id`
 - `POST /api/admin/overrides/attendance`
 - `POST /api/admin/overrides/projects`
 - `GET /api/admin/users`
 - `POST /api/admin/users`
+- `POST /api/admin/users/bulk`
+- `PATCH /api/admin/users/:slackUserId`
+- `PATCH /api/admin/users/:slackUserId/messaging`
 - `PATCH /api/admin/users/:slackUserId/messaging/deactivate`
 - `POST /api/admin/sync/reconcile`
 
@@ -118,9 +174,10 @@ Role-based model for upcoming admin panel:
 - `admin`: full access
 - `hr`: almost all operational access (users, timers, sync, overrides)
 - `manager`: view-focused (`users:read`, `attendance:read`, `timers:read`, `sync:read`)
+- `analytics`: read-only dashboards (`users:read`, `attendance:read`)
 - Detailed migration plan: `docs/ADMIN_AUTH_RBAC_PLAN.md`
 
-Create admin/HR/manager accounts (admin only):
+Create admin/HR/manager/analytics accounts (admin only):
 
 - `POST /api/admin/auth/admin-users`
 - Body: `{ "email": "manager@company.com", "password": "StrongPassword123", "role": "manager" }`
@@ -164,9 +221,24 @@ User management APIs:
 - Add/update user: `POST /api/admin/users`
   - Body: `{ "name": "Rahul Anand", "slackId": "U0A5YQ63CMT", "email": "rahul@example.com", "isMessageEnabled": true }`
   - Requires admin permission: `users:write`
+- Bulk add users: `POST /api/admin/users/bulk`
+  - Body: `{ "users": [{ "name": "Rahul", "slackId": "U0...", "email": "r@x.com", "isMessageEnabled": true }] }`
+  - Requires admin permission: `users:write`
+- Edit user fields: `PATCH /api/admin/users/:slackUserId`
+  - Body example: `{ "email": "rahul.updated@example.com" }`
+  - Requires admin permission: `users:write`
+- Toggle messaging state: `PATCH /api/admin/users/:slackUserId/messaging`
+  - Body example: `{ "isMessageEnabled": false }`
+  - Requires admin permission: `users:write`
 - Deactivate messaging: `PATCH /api/admin/users/:slackUserId/messaging/deactivate`
   - Sets `isMessageEnabled` to `false`
   - Requires admin permission: `users:write`
+
+Dashboard API:
+
+- Summary metrics: `GET /api/admin/dashboard/summary`
+  - Returns: active users, messaging-enabled users, pending attendance, overrides today, active timers, current date.
+  - Requires: `attendance:read`
 
 Project catalog APIs:
 
@@ -178,9 +250,36 @@ Project catalog APIs:
 - Update project: `PATCH /api/admin/projects/:id`
   - Body example: `{ "name": "Internal Tooling", "active": false }`
   - Requires: `projects:write`
+- Delete project: `DELETE /api/admin/projects/:id`
+  - Requires: `projects:write`
 
 Slack project modal options now come from active project catalog entries in DB.
 Active project names are cached in Redis with TTL (`PROJECT_CATALOG_CACHE_TTL_SECONDS`) and invalidated on project create/update.
+
+Attendance admin APIs:
+
+- List attendance rows by date: `GET /api/admin/attendance?dateYmd=YYYY-MM-DD`
+  - If `dateYmd` is omitted, server timezone "today" is used.
+  - Requires: `attendance:read`
+- Monthly attendance matrix: `GET /api/admin/attendance/month?month=YYYY-MM`
+  - `month` is optional; defaults to current month in server timezone.
+  - Returns users + day-wise statuses/projects for the month.
+  - Requires: `attendance:read`
+- Single user monthly attendance: `GET /api/admin/attendance/users/:slackUserId/month?month=YYYY-MM`
+  - `month` is optional; defaults to current month.
+  - Requires: `attendance:read`
+
+Timer admin APIs:
+
+- Create timer: `POST /api/admin/timers`
+  - Body example: `{ "name": "Morning Reminder", "timerType": "morning", "time": "09:30", "timezone": "Asia/Kolkata", "active": true }`
+  - Backend converts `time` to cron expression.
+  - Requires: `timers:write`
+- Manual attendance reminder trigger: `POST /api/admin/timers/trigger-attendance`
+  - Optional body: `{ "slackUserIds": ["U0A5YQ63CMT", "U019ABCDEF1"] }`
+  - With `slackUserIds`, sends only to selected users.
+  - Without `slackUserIds`, sends only to recipients who have not marked attendance for today.
+  - Requires: `timers:write`
 
 ## Standards
 

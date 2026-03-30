@@ -1,19 +1,7 @@
 import type { Request, Response } from 'express';
-import { z } from 'zod';
 import type { AttendanceValue } from '../repositories/models';
+import { attendanceOverrideSchema, projectsOverrideSchema } from '../schemas/override.schema';
 import type { OverrideService } from '../services/override.service';
-
-const attendanceOverrideSchema = z.object({
-  slackUserId: z.string().min(1),
-  dateYmd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  status: z.enum(['WFO', 'WFH', '-1', '-0.5'])
-});
-
-const projectsOverrideSchema = z.object({
-  slackUserId: z.string().min(1),
-  dateYmd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  projects: z.array(z.string()).max(3)
-});
 
 export class OverrideController {
   constructor(private readonly overrideService: OverrideService) {}

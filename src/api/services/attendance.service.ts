@@ -68,6 +68,147 @@ export class AttendanceService {
     return this.attendanceRepository.getProjectsForDate(user.id, dateYmd);
   }
 
+  async listDailyAttendance(dateYmd: string): Promise<
+    Array<{
+      slackUserId: string;
+      name: string | null;
+      email: string | null;
+      isMessageEnabled: boolean;
+      dateYmd: string;
+      status: AttendanceValue | null;
+      projects: string[];
+    }>
+  > {
+    const users = await this.userRepository.listUsers();
+
+    const rows = await Promise.all(
+      users.map(async (user) => ({
+        slackUserId: user.slackUserId,
+        name: user.displayName,
+        email: user.email,
+        isMessageEnabled: user.isMessageEnabled,
+        dateYmd,
+        status: await this.attendanceRepository.getAttendanceForDate(user.id, dateYmd),
+        projects: await this.attendanceRepository.getProjectsForDate(user.id, dateYmd)
+      }))
+    );
+
+    return rows;
+  }
+
+  async listMonthlyAttendance(month?: string): Promise<{
+    month: string;
+    dates: string[];
+    users: Array<{
+      slackUserId: string;
+      name: string | null;
+      email: string | null;
+      isMessageEnabled: boolean;
+      days: Array<{ dateYmd: string; status: AttendanceValue | null; projects: string[] }>;
+    }>;
+  }> {
+    const { monthKey, fromDateYmd, toDateYmd, dates } = this.resolveMonthRange(month);
+    const [users, snapshotRows] = await Promise.all([
+      this.userRepository.listUsers(),
+      this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd)
+    ]);
+
+    const rowMap = new Map(
+      snapshotRows.map((row) => [
+        `${row.slackUserId}:${row.dateYmd}`,
+        { status: row.status, projects: row.projects }
+      ])
+    );
+
+    return {
+      month: monthKey,
+      dates,
+      users: users.map((user) => ({
+        slackUserId: user.slackUserId,
+        name: user.displayName,
+        email: user.email,
+        isMessageEnabled: user.isMessageEnabled,
+        days: dates.map((dateYmd) => {
+          const key = `${user.slackUserId}:${dateYmd}`;
+          const data = rowMap.get(key);
+          return {
+            dateYmd,
+            status: data?.status ?? null,
+            projects: data?.projects ?? []
+          };
+        })
+      }))
+    };
+  }
+
+  async getUserMonthlyAttendance(
+    slackUserId: string,
+    month?: string
+  ): Promise<{
+    slackUserId: string;
+    name: string | null;
+    email: string | null;
+    isMessageEnabled: boolean;
+    month: string;
+    days: Array<{ dateYmd: string; status: AttendanceValue | null; projects: string[] }>;
+  } | null> {
+    const user = await this.userRepository.findBySlackId(slackUserId);
+    if (!user) return null;
+
+    const { monthKey, fromDateYmd, toDateYmd, dates } = this.resolveMonthRange(month);
+    const snapshotRows = await this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd);
+    const userRows = snapshotRows.filter((row) => row.slackUserId === slackUserId);
+    const rowMap = new Map(
+      userRows.map((row) => [row.dateYmd, { status: row.status, projects: row.projects }])
+    );
+
+    return {
+      slackUserId: user.slackUserId,
+      name: user.displayName,
+      email: user.email,
+      isMessageEnabled: user.isMessageEnabled,
+      month: monthKey,
+      days: dates.map((dateYmd) => {
+        const data = rowMap.get(dateYmd);
+        return {
+          dateYmd,
+          status: data?.status ?? null,
+          projects: data?.projects ?? []
+        };
+      })
+    };
+  }
+
+  private resolveMonthRange(month?: string): {
+    monthKey: string;
+    fromDateYmd: string;
+    toDateYmd: string;
+    dates: string[];
+  } {
+    const monthStart = month
+      ? DateTime.fromFormat(month, 'yyyy-LL', { zone: env.TIMEZONE }).startOf('month')
+      : DateTime.now().setZone(env.TIMEZONE).startOf('month');
+
+    if (!monthStart.isValid) {
+      throw new Error('Invalid month format. Expected YYYY-MM.');
+    }
+
+    const monthEnd = monthStart.endOf('month');
+    const dates: string[] = [];
+    let cursor = monthStart;
+    while (cursor <= monthEnd) {
+      dates.push(cursor.toFormat('yyyy-LL-dd'));
+      cursor = cursor.plus({ days: 1 });
+    }
+
+    return {
+      monthKey: monthStart.toFormat('yyyy-LL'),
+      fromDateYmd: monthStart.toFormat('yyyy-LL-dd'),
+      toDateYmd: monthEnd.toFormat('yyyy-LL-dd'),
+      dates
+    };
+  }
+
   getTodayYmd(): string {
     return DateTime.now().setZone(env.TIMEZONE).toFormat('yyyy-LL-dd');
   }

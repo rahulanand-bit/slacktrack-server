@@ -65,12 +65,45 @@ export function buildSwaggerSpec() {
             },
             required: ['id', 'name', 'active', 'createdAt', 'updatedAt']
           },
+          AttendanceRow: {
+            type: 'object',
+            properties: {
+              slackUserId: { type: 'string', example: 'U0A5YQ63CMT' },
+              name: { type: 'string', nullable: true, example: 'Rahul Anand' },
+              email: { type: 'string', nullable: true, example: 'rahul@example.com' },
+              isMessageEnabled: { type: 'boolean', example: true },
+              dateYmd: { type: 'string', example: '2026-03-30' },
+              status: { type: 'string', nullable: true, enum: ['WFO', 'WFH', '-1', '-0.5'] },
+              projects: { type: 'array', items: { type: 'string' }, example: ['SlackTrack'] }
+            },
+            required: ['slackUserId', 'name', 'email', 'isMessageEnabled', 'dateYmd', 'status', 'projects']
+          },
+          AttendanceMonthUser: {
+            type: 'object',
+            properties: {
+              slackUserId: { type: 'string' },
+              name: { type: 'string', nullable: true },
+              email: { type: 'string', nullable: true },
+              isMessageEnabled: { type: 'boolean' },
+              days: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    dateYmd: { type: 'string' },
+                    status: { type: 'string', nullable: true, enum: ['WFO', 'WFH', '-1', '-0.5'] },
+                    projects: { type: 'array', items: { type: 'string' } }
+                  }
+                }
+              }
+            }
+          },
           AdminAuthUser: {
             type: 'object',
             properties: {
               id: { type: 'integer', example: 1 },
               email: { type: 'string', example: 'hr@company.com' },
-              role: { type: 'string', enum: ['admin', 'hr', 'manager'], example: 'hr' },
+              role: { type: 'string', enum: ['admin', 'hr', 'manager', 'analytics'], example: 'hr' },
               permissions: {
                 type: 'array',
                 items: { type: 'string' },
@@ -93,10 +126,29 @@ export function buildSwaggerSpec() {
             properties: {
               id: { type: 'integer', example: 2 },
               email: { type: 'string', example: 'manager@company.com' },
-              role: { type: 'string', enum: ['admin', 'hr', 'manager'], example: 'manager' },
+              role: { type: 'string', enum: ['admin', 'hr', 'manager', 'analytics'], example: 'manager' },
               active: { type: 'boolean', example: true }
             },
             required: ['id', 'email', 'role', 'active']
+          },
+          DashboardSummary: {
+            type: 'object',
+            properties: {
+              activeUsers: { type: 'integer', example: 24 },
+              messagingEnabled: { type: 'integer', example: 20 },
+              pendingAttendance: { type: 'integer', example: 5 },
+              overridesToday: { type: 'integer', example: 2 },
+              activeTimers: { type: 'integer', example: 3 },
+              dateYmd: { type: 'string', example: '2026-03-30' }
+            },
+            required: [
+              'activeUsers',
+              'messagingEnabled',
+              'pendingAttendance',
+              'overridesToday',
+              'activeTimers',
+              'dateYmd'
+            ]
           }
         }
       },
@@ -193,7 +245,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/auth/admin-users': {
           post: {
-            summary: 'Create admin/HR/manager user (admin only)',
+            summary: 'Create admin/HR/manager/analytics user (admin only)',
             security: [{ bearerAuth: [] }],
             requestBody: {
               required: true,
@@ -265,6 +317,28 @@ export function buildSwaggerSpec() {
                         email: 'hr@company.com',
                         role: 'hr',
                         permissions: ['users:read', 'users:write', 'overrides:write']
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/dashboard/summary': {
+          get: {
+            summary: 'Get admin dashboard summary metrics',
+            security: [{ bearerAuth: [] }],
+            responses: {
+              '200': {
+                description: 'Dashboard summary',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: { $ref: '#/components/schemas/DashboardSummary' }
                       }
                     }
                   }
@@ -365,6 +439,125 @@ export function buildSwaggerSpec() {
                 }
               }
             }
+          },
+          delete: {
+            summary: 'Delete project catalog item',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: 'id',
+                in: 'path',
+                required: true,
+                schema: { type: 'integer' }
+              }
+            ],
+            responses: {
+              '200': {
+                description: 'Project deleted',
+                content: {
+                  'application/json': {
+                    example: { ok: true }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/attendance': {
+          get: {
+            summary: 'List attendance rows for a day',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: 'dateYmd',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03-30' }
+              }
+            ],
+            responses: {
+              '200': {
+                description: 'Attendance rows',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: { type: 'array', items: { $ref: '#/components/schemas/AttendanceRow' } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/attendance/month': {
+          get: {
+            summary: 'List monthly attendance matrix',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: 'month',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03' }
+              }
+            ],
+            responses: {
+              '200': {
+                description: 'Monthly attendance matrix',
+                content: {
+                  'application/json': {
+                    example: {
+                      ok: true,
+                      data: {
+                        month: '2026-03',
+                        dates: ['2026-03-01', '2026-03-02'],
+                        users: []
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/attendance/users/{slackUserId}/month': {
+          get: {
+            summary: 'Get monthly attendance for one user',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: 'slackUserId',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              },
+              {
+                name: 'month',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03' }
+              }
+            ],
+            responses: {
+              '200': {
+                description: 'User monthly attendance',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: { $ref: '#/components/schemas/AttendanceMonthUser' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
           }
         },
         '/api/admin/timers': {
@@ -398,7 +591,7 @@ export function buildSwaggerSpec() {
                   example: {
                     name: 'Test Reminder',
                     timerType: 'custom',
-                    cronExpression: '*/5 * * * *',
+                    time: '09:30',
                     timezone: 'Asia/Kolkata',
                     active: true
                   }
@@ -416,6 +609,36 @@ export function buildSwaggerSpec() {
                         ok: { type: 'boolean' },
                         data: { $ref: '#/components/schemas/Timer' }
                       }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/timers/trigger-attendance': {
+          post: {
+            summary: 'Manually trigger attendance reminder message(s)',
+            security: [{ bearerAuth: [] }],
+            requestBody: {
+              required: false,
+              content: {
+                'application/json': {
+                  example: {
+                    slackUserIds: ['U0A5YQ63CMT', 'U019ABCDEF1']
+                  }
+                }
+              }
+            },
+            responses: {
+              '202': {
+                description: 'Manual attendance reminder sent',
+                content: {
+                  'application/json': {
+                    example: {
+                      ok: true,
+                      message: 'Attendance reminder sent',
+                      data: { recipients: 1 }
                     }
                   }
                 }
@@ -441,7 +664,7 @@ export function buildSwaggerSpec() {
                 'application/json': {
                   example: {
                     name: 'Evening Reminder',
-                    cronExpression: '0 18 * * *',
+                    time: '18:00',
                     active: true
                   }
                 }
@@ -583,6 +806,129 @@ export function buildSwaggerSpec() {
             responses: {
               '201': {
                 description: 'User upserted',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: { $ref: '#/components/schemas/User' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/users/bulk': {
+          post: {
+            summary: 'Add users in bulk',
+            security: [{ bearerAuth: [] }],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  example: {
+                    users: [
+                      {
+                        name: 'Rahul Anand',
+                        slackId: 'U0A5YQ63CMT',
+                        email: 'rahul@example.com',
+                        isMessageEnabled: true
+                      },
+                      {
+                        name: 'Asha',
+                        slackId: 'U019ABCDEF1',
+                        email: 'asha@example.com',
+                        isMessageEnabled: true
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            responses: {
+              '201': {
+                description: 'Users upserted',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: { type: 'array', items: { $ref: '#/components/schemas/User' } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/users/{slackUserId}': {
+          patch: {
+            summary: 'Update user profile fields',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: 'slackUserId',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              }
+            ],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  example: {
+                    email: 'rahul.updated@example.com'
+                  }
+                }
+              }
+            },
+            responses: {
+              '200': {
+                description: 'User updated',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: { $ref: '#/components/schemas/User' }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/users/{slackUserId}/messaging': {
+          patch: {
+            summary: 'Enable or disable reminder messaging for a user',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              {
+                name: 'slackUserId',
+                in: 'path',
+                required: true,
+                schema: { type: 'string' }
+              }
+            ],
+            requestBody: {
+              required: true,
+              content: {
+                'application/json': {
+                  example: { isMessageEnabled: false }
+                }
+              }
+            },
+            responses: {
+              '200': {
+                description: 'Messaging state updated',
                 content: {
                   'application/json': {
                     schema: {

@@ -1,0 +1,124 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               BigInt            @id @default(autoincrement())
+  slackUserId      String            @unique @map("slack_user_id")
+  displayName      String?           @map("display_name")
+  email            String?
+  isMessageEnabled Boolean           @default(true) @map("is_message_enabled")
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
+  attendance       AttendanceEntry[]
+  projects         ProjectEntry[]
+
+  @@map("users")
+}
+
+model AttendanceEntry {
+  id        BigInt   @id @default(autoincrement())
+  userId    BigInt   @map("user_id")
+  dateYmd   DateTime @map("date_ymd") @db.Date
+  status    String
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateYmd])
+  @@map("attendance_entries")
+}
+
+model ProjectEntry {
+  id          BigInt   @id @default(autoincrement())
+  userId      BigInt   @map("user_id")
+  dateYmd     DateTime @map("date_ymd") @db.Date
+  slotIndex   Int      @map("slot_index")
+  projectName String   @map("project_name")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dateYmd, slotIndex])
+  @@map("project_entries")
+}
+
+model Project {
+  id        BigInt   @id @default(autoincrement())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("projects")
+}
+
+model Holiday {
+  dateYmd      DateTime @id @map("date_ymd") @db.Date
+  holidayName  String   @map("holiday_name")
+
+  @@map("holidays")
+}
+
+model ReminderTimer {
+  id             BigInt   @id @default(autoincrement())
+  name           String
+  timerType      String   @map("timer_type")
+  cronExpression String   @map("cron_expression")
+  timezone       String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("reminder_timers")
+}
+
+model ManualOverrideAudit {
+  id           BigInt   @id @default(autoincrement())
+  overrideType String   @map("override_type")
+  slackUserId  String   @map("slack_user_id")
+  dateYmd      DateTime @map("date_ymd") @db.Date
+  payloadJson  Json     @map("payload_json")
+  actorId      String   @map("actor_id")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("manual_override_audit")
+}
+
+model SheetSyncState {
+  syncKey   String   @id @map("sync_key")
+  dbHash    String   @map("db_hash")
+  sheetHash String   @map("sheet_hash")
+  updatedAt DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("sheet_sync_state")
+}
+
+model AdminUser {
+  id           BigInt         @id @default(autoincrement())
+  email        String         @unique
+  passwordHash String         @map("password_hash")
+  role         String
+  active       Boolean        @default(true)
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime       @default(now()) @map("updated_at") @db.Timestamptz(6)
+  sessions     AdminSession[]
+
+  @@map("admin_users")
+}
+
+model AdminSession {
+  id          BigInt    @id @default(autoincrement())
+  adminUserId BigInt    @map("admin_user_id")
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt   DateTime? @map("revoked_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId], map: "idx_admin_sessions_admin_user_id")
+  @@index([expiresAt], map: "idx_admin_sessions_expires_at")
+  @@map("admin_sessions")
+}
