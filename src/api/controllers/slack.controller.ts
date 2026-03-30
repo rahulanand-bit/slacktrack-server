@@ -1,0 +1,309 @@
+import type { Request, Response } from 'express';
+import { env } from '../../config/env';
+import { logger } from '../../config/logger';
+import { AttendanceService } from '../services/attendance.service';
+import type { ChatService } from '../services/chat.service';
+import type { ProjectCatalogService } from '../services/project-catalog.service';
+import type { SlackApiService } from '../services/slack-api.service';
+import { parseSlackInteractivePayload, verifySlackSignature } from '../../utils/slack';
+
+type RawRequest = Request & { rawBody?: string };
+
+export class SlackController {
+  constructor(
+    private readonly attendanceService: AttendanceService,
+    private readonly chatService: ChatService,
+    private readonly projectCatalogService: ProjectCatalogService,
+    private readonly slackApiService: SlackApiService
+  ) {}
+
+  async postSlack(req: RawRequest, res: Response): Promise<void> {
+    const rawBody = req.rawBody || '';
+    const signature = req.header('x-slack-signature');
+    const timestamp = req.header('x-slack-request-timestamp');
+    const valid = verifySlackSignature({
+      signingSecret: env.SLACK_SIGNING_SECRET,
+      rawBody,
+      signature,
+      timestamp
+    });
+    if (!valid) {
+      res.status(401).json({ ok: false, error: 'Invalid Slack signature' });
+      return;
+    }
+
+    if (rawBody.trim().startsWith('{')) {
+      await this.handleEventPayload(req, res);
+      return;
+    }
+
+    await this.handleInteractivePayload(req, res);
+  }
+
+  private async handleEventPayload(req: RawRequest, res: Response): Promise<void> {
+    const body = req.body as Record<string, unknown>;
+
+    if (body.type === 'url_verification' && typeof body.challenge === 'string') {
+      res.status(200).send(body.challenge);
+      return;
+    }
+
+    if (body.type !== 'event_callback') {
+      res.status(200).send('ok');
+      return;
+    }
+
+    const teamId = typeof body.team_id === 'string' ? body.team_id : '';
+    if (env.SLACK_TEAM_ID && teamId && teamId !== env.SLACK_TEAM_ID) {
+      res.status(200).send('ok');
+      return;
+    }
+
+    const event = (body.event || {}) as Record<string, unknown>;
+    const type = String(event.type || '');
+    const channelType = String(event.channel_type || '');
+    const user = String(event.user || '');
+    const channel = String(event.channel || '');
+    const text = String(event.text || '');
+    const ts = String(event.ts || Date.now());
+    const isBot = Boolean(event.bot_id) || Boolean(event.subtype);
+
+    if (type === 'message' && channelType === 'im' && !isBot && user && channel && text) {
+      await this.chatService.enqueueChatParse({
+        slackUserId: user,
+        channelId: channel,
+        text,
+        eventTs: ts
+      });
+    }
+
+    res.status(200).send('ok');
+  }
+
+  private async handleInteractivePayload(req: RawRequest, res: Response): Promise<void> {
+    const rawBody = req.rawBody || '';
+    const parsedFromRaw = parseSlackInteractivePayload(rawBody);
+    let parsedFromBody: object | null = null;
+    try {
+      if (typeof req.body.payload === 'string') {
+        parsedFromBody = JSON.parse(req.body.payload);
+      } else if (req.body.payload && typeof req.body.payload === 'object') {
+        parsedFromBody = req.body.payload as object;
+      }
+    } catch {
+      parsedFromBody = null;
+    }
+
+    const payload = parsedFromRaw || parsedFromBody;
+    if (!payload) {
+      res.status(400).json({ ok: false, error: 'Invalid interactive payload' });
+      return;
+    }
+
+    const typedPayload = payload as {
+      type?: string;
+      team?: { id?: string };
+      user?: { id?: string };
+      actions?: Array<{ action_id?: string }>;
+      action_ts?: string;
+      trigger_id?: string;
+      channel?: { id?: string };
+      container?: { channel_id?: string; message_ts?: string };
+      message?: { ts?: string };
+      view?: {
+        callback_id?: string;
+        private_metadata?: string;
+        state?: {
+          values?: Record<string, Record<string, Record<string, unknown>>>;
+        };
+      };
+    };
+
+    if (env.SLACK_TEAM_ID && typedPayload.team?.id && typedPayload.team.id !== env.SLACK_TEAM_ID) {
+      res.status(200).json({ ok: false, error: 'Team mismatch' });
+      return;
+    }
+
+    if (typedPayload.type === 'view_submission' && typedPayload.view?.callback_id === 'project_modal_submit') {
+      await this.handleProjectModalSubmission(typedPayload, res);
+      return;
+    }
+
+    const userId = typedPayload.user?.id;
+    const actionId = typedPayload.actions?.[0]?.action_id;
+    if (actionId === 'set_projects') {
+      await this.handleProjectModalOpen(typedPayload, res);
+      return;
+    }
+
+    const resolvedAttendance = AttendanceService.mapActionToAttendance(actionId);
+
+    if (!userId || !resolvedAttendance) {
+      res.status(200).json({ response_type: 'ephemeral', text: 'Invalid action payload.' });
+      return;
+    }
+
+    await this.attendanceService.enqueueAttendanceUpdate({
+      slackUserId: userId,
+      attendanceValue: resolvedAttendance as 'WFO' | 'WFH' | '-1' | '-0.5',
+      actionTs: typedPayload.action_ts || String(Date.now()),
+      sourceChannelId: typedPayload.channel?.id || typedPayload.container?.channel_id,
+      sourceMessageTs: typedPayload.container?.message_ts || typedPayload.message?.ts
+    });
+
+    logger.info({ userId, actionId, resolvedAttendance }, 'Interactive attendance queued');
+    res.status(200).json({
+      response_type: 'ephemeral',
+      replace_original: false,
+      text: 'Attendance noted. Processing update.'
+    });
+  }
+
+  private async handleProjectModalOpen(
+    payload: {
+      user?: { id?: string };
+      trigger_id?: string;
+    },
+    res: Response
+  ): Promise<void> {
+    if (!env.ENABLE_PROJECT_TRACKING || !env.PROJECT_SPLIT_MODAL_ENABLED) {
+      res.status(200).json({
+        response_type: 'ephemeral',
+        text: 'Project tracking is currently disabled.'
+      });
+      return;
+    }
+
+    const userId = payload.user?.id;
+    const triggerId = payload.trigger_id;
+    if (!userId || !triggerId) {
+      res.status(200).json({ response_type: 'ephemeral', text: 'Project modal could not be opened.' });
+      return;
+    }
+
+    const dateYmd = this.attendanceService.getTodayYmd();
+    const existingProjects = await this.attendanceService.getProjectsForDate(userId, dateYmd);
+    const projectOptions = await this.projectCatalogService.listActiveProjectNames();
+    await this.slackApiService.openProjectModal({
+      triggerId,
+      slackUserId: userId,
+      dateYmd,
+      existingProjects,
+      projectOptions
+    });
+
+    res.status(200).json({ ok: true });
+  }
+
+  private async handleProjectModalSubmission(
+    payload: {
+      user?: { id?: string };
+      view?: {
+        private_metadata?: string;
+        state?: {
+          values?: Record<string, Record<string, Record<string, unknown>>>;
+        };
+      };
+    },
+    res: Response
+  ): Promise<void> {
+    if (!env.ENABLE_PROJECT_TRACKING || !env.PROJECT_SPLIT_MODAL_ENABLED) {
+      res.status(200).json({ response_action: 'clear' });
+      return;
+    }
+
+    const metadata = this.parsePrivateMetadata(payload.view?.private_metadata);
+    const userId = metadata.slackUserId || payload.user?.id;
+    const dateYmd = metadata.dateYmd || this.attendanceService.getTodayYmd();
+
+    if (!userId) {
+      res.status(200).json({ response_action: 'clear' });
+      return;
+    }
+
+    const projects = this.extractProjectsFromViewState(payload.view?.state?.values);
+    try {
+      const normalized = AttendanceService.validateProjects(projects, env.MAX_PROJECTS_PER_DAY);
+      await this.attendanceService.enqueueProjectUpdate({
+        slackUserId: userId,
+        dateYmd,
+        projects: normalized,
+        submissionTs: String(Date.now())
+      });
+      res.status(200).json({ response_action: 'clear' });
+    } catch (err) {
+      const errorMessage = String(err instanceof Error ? err.message : 'Invalid project input');
+      const blocks = this.extractProjectErrorBlocks(payload.view?.state?.values);
+      const errors: Record<string, string> = {};
+      for (const blockId of blocks) {
+        errors[blockId] = errorMessage;
+      }
+      if (Object.keys(errors).length === 0) {
+        errors.projects_text_block = errorMessage;
+      }
+
+      res.status(200).json({
+        response_action: 'errors',
+        errors
+      });
+    }
+  }
+
+  private parsePrivateMetadata(rawMetadata?: string): {
+    slackUserId?: string;
+    dateYmd?: string;
+  } {
+    if (!rawMetadata) return {};
+    try {
+      const parsed = JSON.parse(rawMetadata) as { slackUserId?: string; dateYmd?: string };
+      return {
+        slackUserId: parsed.slackUserId,
+        dateYmd: parsed.dateYmd
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  private extractProjectsFromViewState(
+    values: Record<string, Record<string, Record<string, unknown>>> | undefined
+  ): string[] {
+    if (!values) return [];
+
+    const selectedProjects: string[] = [];
+    const entries = Object.values(values);
+    for (const entry of entries) {
+      const action = Object.values(entry)[0];
+      if (!action) continue;
+
+      const multiSelected = action.selected_options;
+      if (Array.isArray(multiSelected)) {
+        for (const option of multiSelected) {
+          const value = (option as { value?: string }).value;
+          if (value) selectedProjects.push(value);
+        }
+      }
+
+      const value = action.value;
+      if (typeof value === 'string' && value.trim()) {
+        selectedProjects.push(
+          ...value
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean)
+        );
+      }
+    }
+
+    return Array.from(new Set(selectedProjects));
+  }
+
+  private extractProjectErrorBlocks(
+    values: Record<string, Record<string, Record<string, unknown>>> | undefined
+  ): string[] {
+    if (!values) return [];
+    return Object.keys(values).filter(
+      (blockId) => blockId === 'projects_text_block' || blockId === 'projects_select_block'
+    );
+  }
+}
