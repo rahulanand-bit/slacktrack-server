@@ -77,6 +77,28 @@ export function createWorkers(): Worker[] {
     { connection: queueRegistry.redisConnection }
   );
 
+  projectWorker.on('failed', async (job) => {
+    if (!job || job.name !== JOB_NAMES.PROJECT_UPDATE) return;
+    await container.services.slackApiService.updateAttendanceMessageState({
+      channelId: job.data.sourceChannelId,
+      messageTs: job.data.sourceMessageTs,
+      selectedActionId: 'set_projects',
+      failed: true,
+      text: 'Project update failed. Please retry.'
+    });
+  });
+
+  projectWorker.on('completed', async (job) => {
+    if (!job || job.name !== JOB_NAMES.PROJECT_UPDATE) return;
+    await container.services.slackApiService.updateAttendanceMessageState({
+      channelId: job.data.sourceChannelId,
+      messageTs: job.data.sourceMessageTs,
+      selectedActionId: 'set_projects',
+      failed: false,
+      text: 'Projects updated.'
+    });
+  });
+
   const reminderWorker = new Worker(
     QUEUE_NAMES.REMINDER,
     async (job: Job<ReminderDispatchJob>) => {

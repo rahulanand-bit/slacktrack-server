@@ -84,6 +84,7 @@ export class SlackApiService {
     messageTs?: string;
     selectedActionId?: string;
     failed?: boolean;
+    text?: string;
   }): Promise<void> {
     if (!params.channelId || !params.messageTs) return;
 
@@ -95,7 +96,7 @@ export class SlackApiService {
     await this.apiCall('chat.update', {
       channel: params.channelId,
       ts: params.messageTs,
-      text: params.failed ? 'Attendance update failed. Please retry.' : 'Attendance noted.',
+      text: params.text || (params.failed ? 'Update failed. Please retry.' : 'Update noted.'),
       blocks
     });
   }
@@ -106,6 +107,8 @@ export class SlackApiService {
     dateYmd: string;
     existingProjects: string[];
     projectOptions: string[];
+    sourceChannelId?: string;
+    sourceMessageTs?: string;
   }): Promise<void> {
     const optionsSource =
       params.projectOptions.length > 0
@@ -146,7 +149,9 @@ export class SlackApiService {
       callback_id: 'project_modal_submit',
       private_metadata: JSON.stringify({
         slackUserId: params.slackUserId,
-        dateYmd: params.dateYmd
+        dateYmd: params.dateYmd,
+        sourceChannelId: params.sourceChannelId,
+        sourceMessageTs: params.sourceMessageTs
       }),
       title: { type: 'plain_text', text: 'Set Projects' },
       submit: { type: 'plain_text', text: 'Save' },
@@ -305,7 +310,8 @@ export class SlackApiService {
                 {
                   type: 'button',
                   action_id: 'set_projects',
-                  text: { type: 'plain_text', text: 'Select Project' }
+                  text: { type: 'plain_text', text: 'Select Project' },
+                  ...(buttonStyle('set_projects') ? { style: buttonStyle('set_projects') } : {})
                 }
               ]
             }

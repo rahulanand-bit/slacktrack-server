@@ -13,6 +13,8 @@ export type ProjectUpdateJob = {
   dateYmd: string;
   projects: string[];
   submissionTs: string;
+  sourceChannelId?: string;
+  sourceMessageTs?: string;
 };
 
 export type ChatParseJob = {

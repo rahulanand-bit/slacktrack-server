@@ -25,6 +25,7 @@ export class AttendanceService {
   async processAttendanceUpdate(job: AttendanceUpdateJob): Promise<void> {
     const dateYmd = this.getTodayYmd();
     await this.setAttendanceForDate(job.slackUserId, dateYmd, job.attendanceValue);
+    await this.jobPublisher.publishSheetReconcile({ reason: 'manual' });
     logger.info(
       {
         slackUserId: job.slackUserId,
@@ -46,6 +47,7 @@ export class AttendanceService {
 
   async processProjectUpdate(job: ProjectUpdateJob): Promise<void> {
     await this.setProjectsForDate(job.slackUserId, job.dateYmd, job.projects);
+    await this.jobPublisher.publishSheetReconcile({ reason: 'manual' });
     logger.info(
       {
         slackUserId: job.slackUserId,

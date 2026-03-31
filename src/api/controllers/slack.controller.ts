@@ -183,6 +183,9 @@ export class SlackController {
     payload: {
       user?: { id?: string };
       trigger_id?: string;
+      channel?: { id?: string };
+      container?: { channel_id?: string; message_ts?: string };
+      message?: { ts?: string };
     },
     res: Response
   ): Promise<void> {
@@ -209,7 +212,9 @@ export class SlackController {
       slackUserId: userId,
       dateYmd,
       existingProjects,
-      projectOptions
+      projectOptions,
+      sourceChannelId: payload.channel?.id || payload.container?.channel_id,
+      sourceMessageTs: payload.container?.message_ts || payload.message?.ts
     });
 
     res.status(200).json({ ok: true });
@@ -265,7 +270,9 @@ export class SlackController {
         slackUserId: userId,
         dateYmd,
         projects: normalized,
-        submissionTs: String(Date.now())
+        submissionTs: String(Date.now()),
+        sourceChannelId: metadata.sourceChannelId,
+        sourceMessageTs: metadata.sourceMessageTs
       });
       logger.info({ userId, dateYmd }, 'Enqueued project update from Slack modal');
       res.status(200).json({ response_action: 'clear' });
@@ -299,13 +306,22 @@ export class SlackController {
   private parsePrivateMetadata(rawMetadata?: string): {
     slackUserId?: string;
     dateYmd?: string;
+    sourceChannelId?: string;
+    sourceMessageTs?: string;
   } {
     if (!rawMetadata) return {};
     try {
-      const parsed = JSON.parse(rawMetadata) as { slackUserId?: string; dateYmd?: string };
+      const parsed = JSON.parse(rawMetadata) as {
+        slackUserId?: string;
+        dateYmd?: string;
+        sourceChannelId?: string;
+        sourceMessageTs?: string;
+      };
       return {
         slackUserId: parsed.slackUserId,
-        dateYmd: parsed.dateYmd
+        dateYmd: parsed.dateYmd,
+        sourceChannelId: parsed.sourceChannelId,
+        sourceMessageTs: parsed.sourceMessageTs
       };
     } catch {
       return {};
