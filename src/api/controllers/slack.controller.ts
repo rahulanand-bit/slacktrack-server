@@ -109,7 +109,12 @@ export class SlackController {
       trigger_id?: string;
       channel?: { id?: string };
       container?: { channel_id?: string; message_ts?: string };
-      message?: { ts?: string };
+      message?: {
+        ts?: string;
+        blocks?: Array<{
+          elements?: Array<{ action_id?: string; style?: string }>;
+        }>;
+      };
       view?: {
         callback_id?: string;
         private_metadata?: string;
@@ -157,6 +162,7 @@ export class SlackController {
     }
 
     const resolvedAttendance = AttendanceService.mapActionToAttendance(actionId);
+    const messageState = this.parseMessageState(typedPayload.message);
 
     if (!userId || !resolvedAttendance) {
       res.status(200).json({ response_type: 'ephemeral', text: 'Invalid action payload.' });
@@ -168,7 +174,8 @@ export class SlackController {
       attendanceValue: resolvedAttendance as 'WFO' | 'WFH' | '-1' | '-0.5',
       actionTs: typedPayload.action_ts || String(Date.now()),
       sourceChannelId: typedPayload.channel?.id || typedPayload.container?.channel_id,
-      sourceMessageTs: typedPayload.container?.message_ts || typedPayload.message?.ts
+      sourceMessageTs: typedPayload.container?.message_ts || typedPayload.message?.ts,
+      projectSelected: messageState.projectSelected
     });
 
     logger.info({ userId, actionId, resolvedAttendance }, 'Interactive attendance queued');
@@ -185,7 +192,12 @@ export class SlackController {
       trigger_id?: string;
       channel?: { id?: string };
       container?: { channel_id?: string; message_ts?: string };
-      message?: { ts?: string };
+      message?: {
+        ts?: string;
+        blocks?: Array<{
+          elements?: Array<{ action_id?: string; style?: string }>;
+        }>;
+      };
     },
     res: Response
   ): Promise<void> {
@@ -207,6 +219,7 @@ export class SlackController {
     const dateYmd = this.attendanceService.getTodayYmd();
     const existingProjects = await this.attendanceService.getProjectsForDate(userId, dateYmd);
     const projectOptions = await this.projectCatalogService.listActiveProjectNames();
+    const messageState = this.parseMessageState(payload.message);
     await this.slackApiService.openProjectModal({
       triggerId,
       slackUserId: userId,
@@ -214,7 +227,8 @@ export class SlackController {
       existingProjects,
       projectOptions,
       sourceChannelId: payload.channel?.id || payload.container?.channel_id,
-      sourceMessageTs: payload.container?.message_ts || payload.message?.ts
+      sourceMessageTs: payload.container?.message_ts || payload.message?.ts,
+      selectedAttendanceActionId: messageState.selectedAttendanceActionId
     });
 
     res.status(200).json({ ok: true });
@@ -272,7 +286,8 @@ export class SlackController {
         projects: normalized,
         submissionTs: String(Date.now()),
         sourceChannelId: metadata.sourceChannelId,
-        sourceMessageTs: metadata.sourceMessageTs
+        sourceMessageTs: metadata.sourceMessageTs,
+        selectedAttendanceActionId: metadata.selectedAttendanceActionId
       });
       logger.info({ userId, dateYmd }, 'Enqueued project update from Slack modal');
       res.status(200).json({ response_action: 'clear' });
@@ -308,6 +323,7 @@ export class SlackController {
     dateYmd?: string;
     sourceChannelId?: string;
     sourceMessageTs?: string;
+    selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
   } {
     if (!rawMetadata) return {};
     try {
@@ -316,12 +332,14 @@ export class SlackController {
         dateYmd?: string;
         sourceChannelId?: string;
         sourceMessageTs?: string;
+        selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
       };
       return {
         slackUserId: parsed.slackUserId,
         dateYmd: parsed.dateYmd,
         sourceChannelId: parsed.sourceChannelId,
-        sourceMessageTs: parsed.sourceMessageTs
+        sourceMessageTs: parsed.sourceMessageTs,
+        selectedAttendanceActionId: parsed.selectedAttendanceActionId
       };
     } catch {
       return {};
@@ -380,5 +398,41 @@ export class SlackController {
     return Object.keys(values).filter(
       (blockId) => blockId === 'projects_text_block' || blockId === 'projects_select_block'
     );
+  }
+
+  private parseMessageState(message?: {
+    blocks?: Array<{
+      elements?: Array<{ action_id?: string; style?: string }>;
+    }>;
+  }): {
+    selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
+    projectSelected: boolean;
+  } {
+    const state: {
+      selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
+      projectSelected: boolean;
+    } = { projectSelected: false };
+
+    const blocks = message?.blocks || [];
+    for (const block of blocks) {
+      const elements = block.elements || [];
+      for (const element of elements) {
+        if (element.action_id === 'set_projects' && element.style === 'primary') {
+          state.projectSelected = true;
+        }
+
+        if (
+          (element.action_id === 'wfo' ||
+            element.action_id === 'wfh' ||
+            element.action_id === 'leave_full' ||
+            element.action_id === 'leave_half') &&
+          (element.style === 'primary' || element.style === 'danger')
+        ) {
+          state.selectedAttendanceActionId = element.action_id;
+        }
+      }
+    }
+
+    return state;
   }
 }

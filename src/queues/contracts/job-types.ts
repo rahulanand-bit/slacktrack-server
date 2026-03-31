@@ -6,6 +6,7 @@ export type AttendanceUpdateJob = {
   actionTs: string;
   sourceChannelId?: string;
   sourceMessageTs?: string;
+  projectSelected?: boolean;
 };
 
 export type ProjectUpdateJob = {
@@ -15,6 +16,7 @@ export type ProjectUpdateJob = {
   submissionTs: string;
   sourceChannelId?: string;
   sourceMessageTs?: string;
+  selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
 };
 
 export type ChatParseJob = {

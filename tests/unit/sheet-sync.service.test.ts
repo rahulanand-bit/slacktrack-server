@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SheetSyncService } from '../../src/api/services/sheet-sync.service';
 import type { AttendanceRepository } from '../../src/api/repositories/attendance.repository';
 import type { SheetSyncRepository } from '../../src/api/repositories/sheet-sync.repository';
+import type { HolidayRepository } from '../../src/api/repositories/holiday.repository';
 import type { UserRepository } from '../../src/api/repositories/user.repository';
 import type { JobPublisher } from '../../src/queues/contracts/job-publisher';
 import type { SheetWriterPort } from '../../src/sheets/sheet-writer.port';
@@ -34,6 +35,10 @@ describe('SheetSyncService', () => {
       ])
     } as unknown as UserRepository;
 
+    const holidayRepository = {
+      listAllDateYmd: vi.fn(async () => [])
+    } as unknown as HolidayRepository;
+
     const sheetWriter = {
       readSheetHash: vi.fn(async () => 'sheet-old-hash'),
       writeMonthProjection: vi.fn(async () => 'sheet-new-hash')
@@ -47,6 +52,7 @@ describe('SheetSyncService', () => {
       attendanceRepository,
       sheetSyncRepository,
       userRepository,
+      holidayRepository,
       sheetWriter,
       jobPublisher
     );

@@ -82,14 +82,16 @@ export class SlackApiService {
   async updateAttendanceMessageState(params: {
     channelId?: string;
     messageTs?: string;
-    selectedActionId?: string;
+    selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
+    projectSelected?: boolean;
     failed?: boolean;
     text?: string;
   }): Promise<void> {
     if (!params.channelId || !params.messageTs) return;
 
     const blocks = this.buildAttendanceBlocks({
-      selectedActionId: params.selectedActionId,
+      selectedAttendanceActionId: params.selectedAttendanceActionId,
+      projectSelected: params.projectSelected,
       failed: params.failed
     });
 
@@ -109,6 +111,7 @@ export class SlackApiService {
     projectOptions: string[];
     sourceChannelId?: string;
     sourceMessageTs?: string;
+    selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
   }): Promise<void> {
     const optionsSource =
       params.projectOptions.length > 0
@@ -151,7 +154,8 @@ export class SlackApiService {
         slackUserId: params.slackUserId,
         dateYmd: params.dateYmd,
         sourceChannelId: params.sourceChannelId,
-        sourceMessageTs: params.sourceMessageTs
+        sourceMessageTs: params.sourceMessageTs,
+        selectedAttendanceActionId: params.selectedAttendanceActionId
       }),
       title: { type: 'plain_text', text: 'Set Projects' },
       submit: { type: 'plain_text', text: 'Save' },
@@ -244,18 +248,20 @@ export class SlackApiService {
   }
 
   private buildAttendanceBlocks(params?: {
-    selectedActionId?: string;
+    selectedAttendanceActionId?: 'wfo' | 'wfh' | 'leave_full' | 'leave_half';
+    projectSelected?: boolean;
     failed?: boolean;
   }): SlackBlock[] {
-    const selected = params?.selectedActionId;
+    const selectedAttendanceActionId = params?.selectedAttendanceActionId;
+    const projectSelected = Boolean(params?.projectSelected);
     const failed = params?.failed;
 
-    const buttonStyle = (actionId: string): string | undefined => {
-      if (!selected || failed) {
+    const attendanceButtonStyle = (actionId: string): string | undefined => {
+      if (!selectedAttendanceActionId || failed) {
         return undefined;
       }
 
-      if (selected === actionId) {
+      if (selectedAttendanceActionId === actionId) {
         if (actionId === 'leave_full' || actionId === 'leave_half') return 'danger';
         return 'primary';
       }
@@ -280,25 +286,25 @@ export class SlackApiService {
             type: 'button',
             action_id: 'wfo',
             text: { type: 'plain_text', text: 'WFO' },
-            ...(buttonStyle('wfo') ? { style: buttonStyle('wfo') } : {})
+            ...(attendanceButtonStyle('wfo') ? { style: attendanceButtonStyle('wfo') } : {})
           },
           {
             type: 'button',
             action_id: 'wfh',
             text: { type: 'plain_text', text: 'WFH' },
-            ...(buttonStyle('wfh') ? { style: buttonStyle('wfh') } : {})
+            ...(attendanceButtonStyle('wfh') ? { style: attendanceButtonStyle('wfh') } : {})
           },
           {
             type: 'button',
             action_id: 'leave_full',
             text: { type: 'plain_text', text: 'Leave (-1)' },
-            ...(buttonStyle('leave_full') ? { style: buttonStyle('leave_full') } : {})
+            ...(attendanceButtonStyle('leave_full') ? { style: attendanceButtonStyle('leave_full') } : {})
           },
           {
             type: 'button',
             action_id: 'leave_half',
             text: { type: 'plain_text', text: 'Half Day (-0.5)' },
-            ...(buttonStyle('leave_half') ? { style: buttonStyle('leave_half') } : {})
+            ...(attendanceButtonStyle('leave_half') ? { style: attendanceButtonStyle('leave_half') } : {})
           }
         ]
       },
@@ -311,7 +317,7 @@ export class SlackApiService {
                   type: 'button',
                   action_id: 'set_projects',
                   text: { type: 'plain_text', text: 'Select Project' },
-                  ...(buttonStyle('set_projects') ? { style: buttonStyle('set_projects') } : {})
+                  ...(projectSelected && !failed ? { style: 'primary' } : {})
                 }
               ]
             }

@@ -39,7 +39,8 @@ export function createWorkers(): Worker[] {
     await container.services.slackApiService.updateAttendanceMessageState({
       channelId: job.data.sourceChannelId,
       messageTs: job.data.sourceMessageTs,
-      selectedActionId: mapAttendanceValueToActionId(job.data.attendanceValue),
+      selectedAttendanceActionId: mapAttendanceValueToActionId(job.data.attendanceValue),
+      projectSelected: Boolean(job.data.projectSelected),
       failed: true
     });
     await container.services.slackApiService.notifyAttendanceFailure(
@@ -54,7 +55,8 @@ export function createWorkers(): Worker[] {
     await container.services.slackApiService.updateAttendanceMessageState({
       channelId: job.data.sourceChannelId,
       messageTs: job.data.sourceMessageTs,
-      selectedActionId: mapAttendanceValueToActionId(job.data.attendanceValue),
+      selectedAttendanceActionId: mapAttendanceValueToActionId(job.data.attendanceValue),
+      projectSelected: Boolean(job.data.projectSelected),
       failed: false
     });
   });
@@ -82,7 +84,8 @@ export function createWorkers(): Worker[] {
     await container.services.slackApiService.updateAttendanceMessageState({
       channelId: job.data.sourceChannelId,
       messageTs: job.data.sourceMessageTs,
-      selectedActionId: 'set_projects',
+      selectedAttendanceActionId: job.data.selectedAttendanceActionId,
+      projectSelected: false,
       failed: true,
       text: 'Project update failed. Please retry.'
     });
@@ -93,7 +96,8 @@ export function createWorkers(): Worker[] {
     await container.services.slackApiService.updateAttendanceMessageState({
       channelId: job.data.sourceChannelId,
       messageTs: job.data.sourceMessageTs,
-      selectedActionId: 'set_projects',
+      selectedAttendanceActionId: job.data.selectedAttendanceActionId,
+      projectSelected: true,
       failed: false,
       text: 'Projects updated.'
     });
@@ -120,7 +124,9 @@ export function createWorkers(): Worker[] {
   return [attendanceWorker, projectWorker, chatWorker, reminderWorker, syncWorker];
 }
 
-function mapAttendanceValueToActionId(value: AttendanceUpdateJob['attendanceValue']): string {
+function mapAttendanceValueToActionId(
+  value: AttendanceUpdateJob['attendanceValue']
+): 'wfo' | 'wfh' | 'leave_full' | 'leave_half' {
   if (value === 'WFO') return 'wfo';
   if (value === 'WFH') return 'wfh';
   if (value === '-1') return 'leave_full';
