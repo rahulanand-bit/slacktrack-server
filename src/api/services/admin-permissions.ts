@@ -12,11 +12,13 @@ const ROLE_PERMISSION_MAP: Record<AdminRole, string[]> = {
     'overrides:write',
     'timers:read',
     'timers:write',
+    'holidays:read',
+    'holidays:write',
     'sync:read',
     'sync:write',
     'audit:read'
   ],
-  manager: ['users:read', 'projects:read', 'attendance:read', 'timers:read', 'sync:read'],
+  manager: ['users:read', 'projects:read', 'attendance:read', 'timers:read', 'holidays:read', 'sync:read'],
   analytics: ['users:read', 'attendance:read']
 };
 

@@ -8,6 +8,7 @@
     "worker:dev": "tsx watch src/workers/worker.ts",
     "seed:test-users": "tsx src/scripts/seed-test-users.ts",
     "seed:projects": "tsx src/scripts/seed-projects.ts",
+    "seed:holidays": "tsx src/scripts/seed-holidays.ts",
     "seed:admin": "tsx src/scripts/seed-admin-user.ts",
     "seed:admin-user": "tsx src/scripts/seed-admin-user.ts",
     "prisma:generate": "prisma generate",

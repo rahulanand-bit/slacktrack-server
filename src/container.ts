@@ -10,6 +10,7 @@ import { OverrideController } from './api/controllers/override.controller';
 import { AuthController } from './api/controllers/auth.controller';
 import { AttendanceAdminController } from './api/controllers/attendance-admin.controller';
 import { DashboardController } from './api/controllers/dashboard.controller';
+import { HolidayController } from './api/controllers/holiday.controller';
 import { ProjectCatalogController } from './api/controllers/project-catalog.controller';
 import { SlackController } from './api/controllers/slack.controller';
 import { SyncController } from './api/controllers/sync.controller';
@@ -19,6 +20,7 @@ import { AttendanceService } from './api/services/attendance.service';
 import { AuthService } from './api/services/auth.service';
 import { ChatService } from './api/services/chat.service';
 import { DashboardService } from './api/services/dashboard.service';
+import { HolidayService } from './api/services/holiday.service';
 import { NlpService } from './api/services/nlp.service';
 import { OverrideService } from './api/services/override.service';
 import { ProjectCatalogService } from './api/services/project-catalog.service';
@@ -48,7 +50,8 @@ const jobPublisher = new BullMqJobPublisher();
 const attendanceService = new AttendanceService(jobPublisher, userRepository, attendanceRepository);
 const authService = new AuthService(adminAuthRepository);
 const projectCatalogService = new ProjectCatalogService(projectCatalogRepository, cacheRedis);
-const chatService = new ChatService(jobPublisher, nlpService, attendanceService, slackApiService);
+const chatService = new ChatService(jobPublisher, nlpService, attendanceService, holidayRepository, slackApiService);
+const holidayService = new HolidayService(holidayRepository);
 const overrideService = new OverrideService(
   userRepository,
   attendanceRepository,
@@ -77,6 +80,7 @@ const slackController = new SlackController(attendanceService, chatService, proj
 const authController = new AuthController(authService);
 const attendanceAdminController = new AttendanceAdminController(attendanceService);
 const dashboardController = new DashboardController(dashboardService);
+const holidayController = new HolidayController(holidayService);
 const projectCatalogController = new ProjectCatalogController(projectCatalogService);
 const overrideController = new OverrideController(overrideService);
 const syncController = new SyncController(sheetSyncService);
@@ -106,12 +110,14 @@ export const container = {
     userAdminService,
     sheetSyncService,
     dashboardService,
+    holidayService,
     slackApiService
   },
   controllers: {
     authController,
     attendanceAdminController,
     dashboardController,
+    holidayController,
     projectCatalogController,
     slackController,
     overrideController,

@@ -8,6 +8,7 @@ import { createProjectRouter } from './api/routes/project.routes';
 import { createAuthRouter } from './api/routes/auth.routes';
 import { createAttendanceRouter } from './api/routes/attendance.routes';
 import { createDashboardRouter } from './api/routes/dashboard.routes';
+import { createHolidayRouter } from './api/routes/holiday.routes';
 import { createSlackRouter } from './api/routes/slack.routes';
 import { createSyncRouter } from './api/routes/sync.routes';
 import { createTimerRouter } from './api/routes/timer.routes';
@@ -47,6 +48,7 @@ export function createApp() {
   app.use('/api/admin', createAuthRouter(container.controllers.authController));
   app.use('/api/admin', createAttendanceRouter(container.controllers.attendanceAdminController));
   app.use('/api/admin', createDashboardRouter(container.controllers.dashboardController));
+  app.use('/api/admin', createHolidayRouter(container.controllers.holidayController));
   app.use('/api/admin', createProjectRouter(container.controllers.projectCatalogController));
   app.use('/api/admin', createTimerRouter(container.controllers.timerController));
   app.use('/api/admin', createUserRouter(container.controllers.userAdminController));
