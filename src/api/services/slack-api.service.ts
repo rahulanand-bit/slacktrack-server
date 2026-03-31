@@ -154,10 +154,57 @@ export class SlackApiService {
       blocks: [projectInputBlock]
     };
 
-    await this.apiCall('views.open', {
-      trigger_id: params.triggerId,
-      view
-    });
+    const viewSummary = {
+      callbackId: view.callback_id,
+      title: view.title.text,
+      submit: view.submit.text,
+      close: view.close.text,
+      blocks: (view.blocks as Array<Record<string, unknown>>).map((block) => {
+        const element = (block.element || {}) as Record<string, unknown>;
+        const options = Array.isArray(element.options)
+          ? (element.options as Array<{ value?: string }>).map((option) => option.value || '')
+          : [];
+
+        return {
+          blockId: String(block.block_id || ''),
+          type: String(block.type || ''),
+          elementType: String(element.type || ''),
+          actionId: String(element.action_id || ''),
+          optionValues: options
+        };
+      })
+    };
+
+    logger.info(
+      {
+        triggerIdLength: params.triggerId.length,
+        slackUserId: params.slackUserId,
+        dateYmd: params.dateYmd,
+        projectOptionsCount: params.projectOptions.length,
+        existingProjects: params.existingProjects,
+        viewSummary
+      },
+      'Opening Slack project modal via views.open'
+    );
+
+    try {
+      await this.apiCall('views.open', {
+        trigger_id: params.triggerId,
+        view
+      });
+      logger.info({ slackUserId: params.slackUserId, dateYmd: params.dateYmd }, 'Slack views.open succeeded');
+    } catch (error) {
+      logger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          slackUserId: params.slackUserId,
+          dateYmd: params.dateYmd,
+          viewSummary
+        },
+        'Slack views.open failed for project modal'
+      );
+      throw error;
+    }
   }
 
   private async apiCall(method: string, body: Record<string, unknown>): Promise<SlackResponse> {
@@ -177,6 +224,15 @@ export class SlackApiService {
 
     const payload = (await response.json()) as SlackResponse;
     if (!payload.ok) {
+      logger.error(
+        {
+          method,
+          status: response.status,
+          slackError: payload.error,
+          responsePayload: payload
+        },
+        'Slack API call returned non-ok response'
+      );
       throw new Error(`Slack ${method} failed: ${payload.error || 'unknown'}`);
     }
     return payload;

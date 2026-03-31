@@ -119,12 +119,32 @@ export class SlackController {
       };
     };
 
+    logger.info(
+      {
+        payloadType: typedPayload.type,
+        teamId: typedPayload.team?.id,
+        userId: typedPayload.user?.id,
+        actionId: typedPayload.actions?.[0]?.action_id,
+        callbackId: typedPayload.view?.callback_id,
+        hasViewState: Boolean(typedPayload.view?.state?.values)
+      },
+      'Received Slack interactive payload'
+    );
+
     if (env.SLACK_TEAM_ID && typedPayload.team?.id && typedPayload.team.id !== env.SLACK_TEAM_ID) {
       res.status(200).json({ ok: false, error: 'Team mismatch' });
       return;
     }
 
     if (typedPayload.type === 'view_submission' && typedPayload.view?.callback_id === 'project_modal_submit') {
+      logger.info(
+        {
+          userId: typedPayload.user?.id,
+          callbackId: typedPayload.view?.callback_id,
+          blockIds: Object.keys(typedPayload.view?.state?.values || {})
+        },
+        'Handling Slack project modal submission'
+      );
       await this.handleProjectModalSubmission(typedPayload, res);
       return;
     }
