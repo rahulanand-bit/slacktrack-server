@@ -7,6 +7,7 @@ export type MonthSheetProjectionInput = {
   users: UserRecord[];
   entries: AttendanceProjectSnapshotRow[];
   projectDelimiter: string;
+  holidayDateYmds: string[];
 };
 
 export interface SheetWriterPort {

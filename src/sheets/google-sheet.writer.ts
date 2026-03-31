@@ -10,6 +10,7 @@ type Rgb = { red: number; green: number; blue: number };
 const HEADER_BG: Rgb = { red: 0.82, green: 0.82, blue: 0.82 };
 const WEEKEND_HEADER_BG: Rgb = { red: 0.94, green: 0.62, blue: 0.68 };
 const WEEKEND_BODY_BG: Rgb = { red: 0.99, green: 0.88, blue: 0.9 };
+const BODY_BG: Rgb = { red: 1, green: 1, blue: 1 };
 
 const PROJECT_PALETTE: Rgb[] = [
   { red: 0.96, green: 0.88, blue: 0.64 },
@@ -125,6 +126,7 @@ export class GoogleSheetWriter implements SheetWriterPort {
     const monthStart = DateTime.fromISO(input.monthStartYmd, { zone: input.timezone }).startOf('month');
     const daysInMonth = monthStart.daysInMonth || 30;
     const totalUsers = Math.floor((rowCount - 1) / 2);
+    const holidaySet = new Set(input.holidayDateYmds);
 
     const requests: sheets_v4.Schema$Request[] = [
       {
@@ -186,6 +188,23 @@ export class GoogleSheetWriter implements SheetWriterPort {
           },
           fields: 'userEnteredFormat(horizontalAlignment,verticalAlignment)'
         }
+      },
+      {
+        repeatCell: {
+          range: {
+            sheetId,
+            startRowIndex: 1,
+            endRowIndex: rowCount,
+            startColumnIndex: 3,
+            endColumnIndex: colCount
+          },
+          cell: {
+            userEnteredFormat: {
+              backgroundColor: BODY_BG
+            }
+          },
+          fields: 'userEnteredFormat.backgroundColor'
+        }
       }
     ];
 
@@ -236,7 +255,9 @@ export class GoogleSheetWriter implements SheetWriterPort {
     for (let day = 1; day <= daysInMonth; day++) {
       const date = monthStart.set({ day });
       const weekday = date.weekday;
-      if (weekday !== 6 && weekday !== 7) continue;
+      const dateYmd = date.toFormat('yyyy-LL-dd');
+      const isNonWorking = weekday === 6 || weekday === 7 || holidaySet.has(dateYmd);
+      if (!isNonWorking) continue;
       const col = 3 + (day - 1);
 
       requests.push({

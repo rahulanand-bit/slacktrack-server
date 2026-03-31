@@ -75,6 +75,7 @@ const sheetSyncService = new SheetSyncService(
   attendanceRepository,
   sheetSyncRepository,
   userRepository,
+  holidayRepository,
   sheetWriter,
   jobPublisher
 );

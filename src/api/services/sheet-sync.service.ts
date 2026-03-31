@@ -4,6 +4,7 @@ import { logger } from '../../config/logger';
 import type { JobPublisher } from '../../queues/contracts/job-publisher';
 import { sha256 } from '../../utils/hash';
 import type { AttendanceRepository } from '../repositories/attendance.repository';
+import type { HolidayRepository } from '../repositories/holiday.repository';
 import type { SheetSyncRepository } from '../repositories/sheet-sync.repository';
 import type { UserRepository } from '../repositories/user.repository';
 import type { SheetWriterPort } from '../../sheets/sheet-writer.port';
@@ -13,6 +14,7 @@ export class SheetSyncService {
     private readonly attendanceRepository: AttendanceRepository,
     private readonly sheetSyncRepository: SheetSyncRepository,
     private readonly userRepository: UserRepository,
+    private readonly holidayRepository: HolidayRepository,
     private readonly sheetWriter: SheetWriterPort,
     private readonly jobPublisher: JobPublisher
   ) {}
@@ -24,6 +26,7 @@ export class SheetSyncService {
   async reconcile(reason: 'periodic' | 'manual'): Promise<void> {
     const now = DateTime.now().setZone(env.TIMEZONE);
     const users = await this.userRepository.listUsers();
+    const holidayDateYmds = await this.holidayRepository.listAllDateYmd();
 
     const months = [now.startOf('month'), now.plus({ months: 1 }).startOf('month')];
     for (const monthStart of months) {
@@ -34,7 +37,8 @@ export class SheetSyncService {
       const dbHash = sha256(
         JSON.stringify({
           users: users.map((user) => [user.slackUserId, user.displayName]),
-          rows: snapshotRows
+          rows: snapshotRows,
+          holidays: holidayDateYmds
         })
       );
 
@@ -55,7 +59,8 @@ export class SheetSyncService {
         timezone: env.TIMEZONE,
         users,
         entries: snapshotRows,
-        projectDelimiter: env.PROJECT_LIST_DELIMITER
+        projectDelimiter: env.PROJECT_LIST_DELIMITER,
+        holidayDateYmds
       });
 
       await this.sheetSyncRepository.upsertState(syncKey, dbHash, updatedSheetHash);
