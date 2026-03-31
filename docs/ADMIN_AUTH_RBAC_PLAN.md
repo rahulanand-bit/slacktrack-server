@@ -28,6 +28,7 @@ Move admin access from static API-key usage to login-based authentication (`emai
 - `sync:write`
 - `timers:read`
 - `timers:write`
+- `analytics:read`
 - `audit:read`
 
 ### `manager`
@@ -36,10 +37,12 @@ Move admin access from static API-key usage to login-based authentication (`emai
 - `overrides:write` (limited scope; team-managed users)
 - `timers:read`
 - `sync:read`
+- `analytics:read`
 
 ### `analytics`
 - `users:read`
 - `attendance:read`
+- `analytics:read`
 
 ## Proposed API Contracts
 

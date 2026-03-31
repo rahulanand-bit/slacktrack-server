@@ -7,6 +7,7 @@ import { createOverrideRouter } from './api/routes/override.routes';
 import { createProjectRouter } from './api/routes/project.routes';
 import { createAuthRouter } from './api/routes/auth.routes';
 import { createAttendanceRouter } from './api/routes/attendance.routes';
+import { createAnalyticsRouter } from './api/routes/analytics.routes';
 import { createDashboardRouter } from './api/routes/dashboard.routes';
 import { createHolidayRouter } from './api/routes/holiday.routes';
 import { createSlackRouter } from './api/routes/slack.routes';
@@ -47,6 +48,7 @@ export function createApp() {
   app.use('/api', createSlackRouter(container.controllers.slackController));
   app.use('/api/admin', createAuthRouter(container.controllers.authController));
   app.use('/api/admin', createAttendanceRouter(container.controllers.attendanceAdminController));
+  app.use('/api/admin', createAnalyticsRouter(container.controllers.analyticsController));
   app.use('/api/admin', createDashboardRouter(container.controllers.dashboardController));
   app.use('/api/admin', createHolidayRouter(container.controllers.holidayController));
   app.use('/api/admin', createProjectRouter(container.controllers.projectCatalogController));

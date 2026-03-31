@@ -64,3 +64,16 @@ export type AdminUserRecord = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export type ProjectMonthlyUserStat = {
+  slackUserId: string;
+  displayName: string | null;
+  email: string | null;
+  projectName: string;
+  daysWorked: number;
+};
+
+export type UserProjectMonthlyStat = {
+  projectName: string;
+  daysWorked: number;
+};

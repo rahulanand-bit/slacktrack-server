@@ -1,4 +1,5 @@
 import { AttendanceRepository } from './api/repositories/attendance.repository';
+import { AnalyticsRepository } from './api/repositories/analytics.repository';
 import { AdminAuthRepository } from './api/repositories/admin-auth.repository';
 import { HolidayRepository } from './api/repositories/holiday.repository';
 import { OverrideAuditRepository } from './api/repositories/override-audit.repository';
@@ -8,6 +9,7 @@ import { TimerRepository } from './api/repositories/timer.repository';
 import { UserRepository } from './api/repositories/user.repository';
 import { OverrideController } from './api/controllers/override.controller';
 import { AuthController } from './api/controllers/auth.controller';
+import { AnalyticsController } from './api/controllers/analytics.controller';
 import { AttendanceAdminController } from './api/controllers/attendance-admin.controller';
 import { DashboardController } from './api/controllers/dashboard.controller';
 import { HolidayController } from './api/controllers/holiday.controller';
@@ -17,6 +19,7 @@ import { SyncController } from './api/controllers/sync.controller';
 import { TimerController } from './api/controllers/timer.controller';
 import { UserAdminController } from './api/controllers/user-admin.controller';
 import { AttendanceService } from './api/services/attendance.service';
+import { AnalyticsService } from './api/services/analytics.service';
 import { AuthService } from './api/services/auth.service';
 import { ChatService } from './api/services/chat.service';
 import { DashboardService } from './api/services/dashboard.service';
@@ -36,6 +39,7 @@ import { cacheRedis } from './config/cache';
 const userRepository = new UserRepository();
 const adminAuthRepository = new AdminAuthRepository();
 const attendanceRepository = new AttendanceRepository();
+const analyticsRepository = new AnalyticsRepository();
 const projectCatalogRepository = new ProjectCatalogRepository();
 const holidayRepository = new HolidayRepository();
 const overrideAuditRepository = new OverrideAuditRepository();
@@ -47,7 +51,7 @@ const sheetWriter = new GoogleSheetWriter();
 
 const jobPublisher = new BullMqJobPublisher();
 
-const attendanceService = new AttendanceService(jobPublisher, userRepository, attendanceRepository);
+const attendanceService = new AttendanceService(jobPublisher, userRepository, attendanceRepository, holidayRepository);
 const authService = new AuthService(adminAuthRepository);
 const projectCatalogService = new ProjectCatalogService(projectCatalogRepository, cacheRedis);
 const chatService = new ChatService(jobPublisher, nlpService, attendanceService, holidayRepository, slackApiService);
@@ -75,11 +79,13 @@ const sheetSyncService = new SheetSyncService(
   jobPublisher
 );
 const dashboardService = new DashboardService(attendanceService, timerRepository, overrideAuditRepository);
+const analyticsService = new AnalyticsService(analyticsRepository);
 
 const slackController = new SlackController(attendanceService, chatService, projectCatalogService, slackApiService);
 const authController = new AuthController(authService);
 const attendanceAdminController = new AttendanceAdminController(attendanceService);
 const dashboardController = new DashboardController(dashboardService);
+const analyticsController = new AnalyticsController(analyticsService);
 const holidayController = new HolidayController(holidayService);
 const projectCatalogController = new ProjectCatalogController(projectCatalogService);
 const overrideController = new OverrideController(overrideService);
@@ -92,6 +98,7 @@ export const container = {
     userRepository,
     adminAuthRepository,
     attendanceRepository,
+    analyticsRepository,
     projectCatalogRepository,
     holidayRepository,
     overrideAuditRepository,
@@ -110,6 +117,7 @@ export const container = {
     userAdminService,
     sheetSyncService,
     dashboardService,
+    analyticsService,
     holidayService,
     slackApiService
   },
@@ -117,6 +125,7 @@ export const container = {
     authController,
     attendanceAdminController,
     dashboardController,
+    analyticsController,
     holidayController,
     projectCatalogController,
     slackController,

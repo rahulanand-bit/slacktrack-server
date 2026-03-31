@@ -14,12 +14,13 @@ const ROLE_PERMISSION_MAP: Record<AdminRole, string[]> = {
     'timers:write',
     'holidays:read',
     'holidays:write',
+    'analytics:read',
     'sync:read',
     'sync:write',
     'audit:read'
   ],
-  manager: ['users:read', 'projects:read', 'attendance:read', 'timers:read', 'holidays:read', 'sync:read'],
-  analytics: ['users:read', 'attendance:read']
+  manager: ['users:read', 'projects:read', 'attendance:read', 'timers:read', 'holidays:read', 'analytics:read', 'sync:read'],
+  analytics: ['users:read', 'attendance:read', 'analytics:read']
 };
 
 export function permissionsForRole(role: AdminRole): string[] {

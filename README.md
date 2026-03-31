@@ -147,6 +147,8 @@ curl -X POST http://localhost:8080/api/admin/sync/reconcile \
 - `GET /api/admin/attendance`
 - `GET /api/admin/attendance/month`
 - `GET /api/admin/attendance/users/:slackUserId/month`
+- `GET /api/admin/analytics/projects`
+- `GET /api/admin/analytics/users/:slackUserId/projects`
 - `GET /api/admin/timers`
 - `POST /api/admin/timers`
 - `POST /api/admin/timers/trigger-attendance`
@@ -172,9 +174,9 @@ Admin APIs support login-based sessions and legacy token RBAC:
 Role-based model for upcoming admin panel:
 
 - `admin`: full access
-- `hr`: almost all operational access (users, timers, sync, overrides)
-- `manager`: view-focused (`users:read`, `attendance:read`, `timers:read`, `sync:read`)
-- `analytics`: read-only dashboards (`users:read`, `attendance:read`)
+- `hr`: almost all operational access (users, timers, sync, overrides, analytics)
+- `manager`: view-focused (`users:read`, `attendance:read`, `timers:read`, `sync:read`, `analytics:read`)
+- `analytics`: read-only dashboards (`users:read`, `attendance:read`, `analytics:read`)
 - Detailed migration plan: `docs/ADMIN_AUTH_RBAC_PLAN.md`
 
 Create admin/HR/manager/analytics accounts (admin only):
@@ -264,10 +266,21 @@ Attendance admin APIs:
 - Monthly attendance matrix: `GET /api/admin/attendance/month?month=YYYY-MM`
   - `month` is optional; defaults to current month in server timezone.
   - Returns users + day-wise statuses/projects for the month.
+  - Includes `nonWorkingDates` for weekends and holidays (for UI highlighting).
   - Requires: `attendance:read`
 - Single user monthly attendance: `GET /api/admin/attendance/users/:slackUserId/month?month=YYYY-MM`
   - `month` is optional; defaults to current month.
+  - Includes `nonWorkingDates` for weekends and holidays.
   - Requires: `attendance:read`
+
+Analytics APIs:
+
+- Monthly project day counts by employee: `GET /api/admin/analytics/projects?month=YYYY-MM`
+  - Counts distinct days per `(employee, project)` only when attendance status is `WFO` or `WFH`.
+  - Requires: `analytics:read`
+- Monthly project day counts for one user: `GET /api/admin/analytics/users/:slackUserId/projects?month=YYYY-MM`
+  - Counts distinct days per project only when attendance status is `WFO` or `WFH`.
+  - Requires: `analytics:read`
 
 Timer admin APIs:
 

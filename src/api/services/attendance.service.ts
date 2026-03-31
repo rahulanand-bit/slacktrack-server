@@ -5,13 +5,15 @@ import type { JobPublisher } from '../../queues/contracts/job-publisher';
 import type { AttendanceUpdateJob, ProjectUpdateJob } from '../../queues/contracts/job-types';
 import type { AttendanceRepository } from '../repositories/attendance.repository';
 import type { AttendanceValue } from '../repositories/models';
+import type { HolidayRepository } from '../repositories/holiday.repository';
 import type { UserRepository } from '../repositories/user.repository';
 
 export class AttendanceService {
   constructor(
     private readonly jobPublisher: JobPublisher,
     private readonly userRepository: UserRepository,
-    private readonly attendanceRepository: AttendanceRepository
+    private readonly attendanceRepository: AttendanceRepository,
+    private readonly holidayRepository: HolidayRepository
   ) {}
 
   async enqueueAttendanceUpdate(job: AttendanceUpdateJob): Promise<void> {
@@ -101,6 +103,7 @@ export class AttendanceService {
   async listMonthlyAttendance(month?: string): Promise<{
     month: string;
     dates: string[];
+    nonWorkingDates: string[];
     users: Array<{
       slackUserId: string;
       name: string | null;
@@ -114,6 +117,7 @@ export class AttendanceService {
       this.userRepository.listUsers(),
       this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd)
     ]);
+    const nonWorkingDateSet = await this.buildNonWorkingDateSet(dates);
 
     const rowMap = new Map(
       snapshotRows.map((row) => [
@@ -125,6 +129,7 @@ export class AttendanceService {
     return {
       month: monthKey,
       dates,
+      nonWorkingDates: dates.filter((dateYmd) => nonWorkingDateSet.has(dateYmd)),
       users: users.map((user) => ({
         slackUserId: user.slackUserId,
         name: user.displayName,
@@ -152,6 +157,7 @@ export class AttendanceService {
     email: string | null;
     isMessageEnabled: boolean;
     month: string;
+    nonWorkingDates: string[];
     days: Array<{ dateYmd: string; status: AttendanceValue | null; projects: string[] }>;
   } | null> {
     const user = await this.userRepository.findBySlackId(slackUserId);
@@ -159,6 +165,7 @@ export class AttendanceService {
 
     const { monthKey, fromDateYmd, toDateYmd, dates } = this.resolveMonthRange(month);
     const snapshotRows = await this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd);
+    const nonWorkingDateSet = await this.buildNonWorkingDateSet(dates);
     const userRows = snapshotRows.filter((row) => row.slackUserId === slackUserId);
     const rowMap = new Map(
       userRows.map((row) => [row.dateYmd, { status: row.status, projects: row.projects }])
@@ -170,6 +177,7 @@ export class AttendanceService {
       email: user.email,
       isMessageEnabled: user.isMessageEnabled,
       month: monthKey,
+      nonWorkingDates: dates.filter((dateYmd) => nonWorkingDateSet.has(dateYmd)),
       days: dates.map((dateYmd) => {
         const data = rowMap.get(dateYmd);
         return {
@@ -213,6 +221,21 @@ export class AttendanceService {
 
   getTodayYmd(): string {
     return DateTime.now().setZone(env.TIMEZONE).toFormat('yyyy-LL-dd');
+  }
+
+  private async buildNonWorkingDateSet(dates: string[]): Promise<Set<string>> {
+    const holidays = await this.holidayRepository.listAllDateYmd();
+    const holidaySet = new Set(holidays);
+    const nonWorking = new Set<string>();
+
+    for (const dateYmd of dates) {
+      const isWeekend = DateTime.fromFormat(dateYmd, 'yyyy-LL-dd', { zone: env.TIMEZONE }).weekday >= 6;
+      if (isWeekend || holidaySet.has(dateYmd)) {
+        nonWorking.add(dateYmd);
+      }
+    }
+
+    return nonWorking;
   }
 
   static validateProjects(projects: string[], maxProjects: number, required = env.PROJECT_TRACKING_REQUIRED): string[] {
