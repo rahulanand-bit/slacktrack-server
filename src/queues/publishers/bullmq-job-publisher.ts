@@ -39,7 +39,7 @@ export const queueRegistry = {
 export class BullMqJobPublisher implements JobPublisher, TimerSchedulerPort {
   async publishAttendanceUpdate(job: AttendanceUpdateJob): Promise<void> {
     await attendanceQueue.add(JOB_NAMES.ATTENDANCE_UPDATE, job, {
-      jobId: `attendance:${job.slackUserId}:${job.actionTs}`,
+      jobId: `attendance-${job.slackUserId}-${job.actionTs}`,
       attempts: 3,
       backoff: { type: 'exponential', delay: 500 },
       removeOnComplete: 1000,
@@ -49,7 +49,7 @@ export class BullMqJobPublisher implements JobPublisher, TimerSchedulerPort {
 
   async publishProjectUpdate(job: ProjectUpdateJob): Promise<void> {
     await projectQueue.add(JOB_NAMES.PROJECT_UPDATE, job, {
-      jobId: `projects:${job.slackUserId}:${job.dateYmd}:${job.submissionTs}`,
+      jobId: `projects-${job.slackUserId}-${job.dateYmd}-${job.submissionTs}`,
       attempts: 3,
       backoff: { type: 'exponential', delay: 500 },
       removeOnComplete: 1000,
@@ -59,7 +59,7 @@ export class BullMqJobPublisher implements JobPublisher, TimerSchedulerPort {
 
   async publishChatParse(job: ChatParseJob): Promise<void> {
     await chatQueue.add(JOB_NAMES.CHAT_PARSE, job, {
-      jobId: `chat:${job.slackUserId}:${job.eventTs}`,
+      jobId: `chat-${job.slackUserId}-${job.eventTs}`,
       attempts: 3,
       backoff: { type: 'exponential', delay: 500 },
       removeOnComplete: 1000,
@@ -86,7 +86,7 @@ export class BullMqJobPublisher implements JobPublisher, TimerSchedulerPort {
   }
 
   async upsertTimerSchedule(timer: TimerSchedulingInput): Promise<void> {
-    const repeatId = `timer:${timer.id}`;
+    const repeatId = `timer-${timer.id}`;
     await this.removeMatchingRepeatJobs(reminderQueue, repeatId);
     if (!timer.active) return;
 
@@ -103,7 +103,7 @@ export class BullMqJobPublisher implements JobPublisher, TimerSchedulerPort {
   }
 
   async removeTimerSchedule(timerId: number): Promise<void> {
-    const repeatId = `timer:${timerId}`;
+    const repeatId = `timer-${timerId}`;
     await this.removeMatchingRepeatJobs(reminderQueue, repeatId);
   }
 
