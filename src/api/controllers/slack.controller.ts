@@ -281,11 +281,17 @@ export class SlackController {
         for (const option of multiSelected) {
           const text = (option as { text?: { text?: string } }).text?.text;
           if (typeof text === 'string' && text.trim()) {
+            if (text === 'No active projects configured') {
+              continue;
+            }
             selectedProjects.push(text);
             continue;
           }
 
           const value = (option as { value?: string }).value;
+          if (value === 'project_none') {
+            continue;
+          }
           if (value) selectedProjects.push(value);
         }
       }

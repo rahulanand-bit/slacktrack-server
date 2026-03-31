@@ -67,7 +67,7 @@ export class SlackApiService {
             {
               type: 'button',
               action_id: 'set_projects',
-              text: { type: 'plain_text', text: 'Set Projects (Optional)' }
+              text: { type: 'plain_text', text: 'Select Project' }
             }
           ]
         }
@@ -119,38 +119,27 @@ export class SlackApiService {
       text: { type: 'plain_text', text: project },
       value: `project_${index + 1}`
     }));
-    const projectInputBlock: SlackBlock =
+
+    const selectableOptions =
       projectOptions.length > 0
-        ? {
-            type: 'input',
-            block_id: 'projects_select_block',
-            optional: !env.PROJECT_TRACKING_REQUIRED,
-            element: {
-              type: 'multi_static_select',
-              action_id: 'projects_select',
-              options: projectOptions,
-              max_selected_items: env.MAX_PROJECTS_PER_DAY,
-              initial_options: projectOptions.filter((option) =>
-                params.existingProjects.includes(String((option.text as { text?: string }).text || ''))
-              )
-            },
-            label: { type: 'plain_text', text: 'Projects (max 3)' }
-          }
-        : {
-            type: 'input',
-            block_id: 'projects_text_block',
-            optional: !env.PROJECT_TRACKING_REQUIRED,
-            element: {
-              type: 'plain_text_input',
-              action_id: 'projects_text',
-              initial_value: params.existingProjects.join(', '),
-              placeholder: {
-                type: 'plain_text',
-                text: 'Comma separated projects (max 3)'
-              }
-            },
-            label: { type: 'plain_text', text: 'Projects (max 3)' }
-          };
+        ? projectOptions
+        : [{ text: { type: 'plain_text', text: 'No active projects configured' }, value: 'project_none' }];
+
+    const projectInputBlock: SlackBlock = {
+      type: 'input',
+      block_id: 'projects_select_block',
+      optional: !env.PROJECT_TRACKING_REQUIRED,
+      element: {
+        type: 'multi_static_select',
+        action_id: 'projects_select',
+        options: selectableOptions,
+        max_selected_items: env.MAX_PROJECTS_PER_DAY,
+        initial_options: selectableOptions.filter((option) =>
+          params.existingProjects.includes(String((option.text as { text?: string }).text || ''))
+        )
+      },
+      label: { type: 'plain_text', text: 'Projects (max 3)' }
+    };
 
     const view = {
       type: 'modal',
@@ -260,7 +249,7 @@ export class SlackApiService {
                 {
                   type: 'button',
                   action_id: 'set_projects',
-                  text: { type: 'plain_text', text: 'Set Projects (Optional)' }
+                  text: { type: 'plain_text', text: 'Select Project' }
                 }
               ]
             }
