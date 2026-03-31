@@ -242,17 +242,44 @@ export class SlackController {
     }
 
     const projects = this.extractProjectsFromViewState(payload.view?.state?.values);
+    logger.info(
+      {
+        userId,
+        dateYmd,
+        extractedProjects: projects
+      },
+      'Parsed projects from Slack modal submission'
+    );
+
     try {
       const normalized = AttendanceService.validateProjects(projects, env.MAX_PROJECTS_PER_DAY);
+      logger.info(
+        {
+          userId,
+          dateYmd,
+          normalizedProjects: normalized
+        },
+        'Validated projects from Slack modal submission'
+      );
       await this.attendanceService.enqueueProjectUpdate({
         slackUserId: userId,
         dateYmd,
         projects: normalized,
         submissionTs: String(Date.now())
       });
+      logger.info({ userId, dateYmd }, 'Enqueued project update from Slack modal');
       res.status(200).json({ response_action: 'clear' });
     } catch (err) {
       const errorMessage = String(err instanceof Error ? err.message : 'Invalid project input');
+      logger.warn(
+        {
+          userId,
+          dateYmd,
+          extractedProjects: projects,
+          errorMessage
+        },
+        'Project modal submission validation failed'
+      );
       const blocks = this.extractProjectErrorBlocks(payload.view?.state?.values);
       const errors: Record<string, string> = {};
       for (const blockId of blocks) {
