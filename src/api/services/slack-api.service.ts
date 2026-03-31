@@ -115,24 +115,42 @@ export class SlackApiService {
             .map((value) => value.trim())
             .filter(Boolean);
 
-    const initial = params.existingProjects.join(', ');
-    const hintSource = optionsSource.length > 0 ? `e.g. ${optionsSource.slice(0, 3).join(', ')}` : 'max 3';
-    const hint = hintSource.length > 80 ? `${hintSource.slice(0, 77)}...` : hintSource;
-    const projectInputBlock: SlackBlock = {
-      type: 'input',
-      block_id: 'projects_text_block',
-      optional: !env.PROJECT_TRACKING_REQUIRED,
-      element: {
-        type: 'plain_text_input',
-        action_id: 'projects_text',
-        initial_value: initial,
-        placeholder: {
-          type: 'plain_text',
-          text: `Comma separated projects (${hint})`
-        }
-      },
-      label: { type: 'plain_text', text: 'Projects (max 3)' }
-    };
+    const projectOptions = optionsSource.map((project, index) => ({
+      text: { type: 'plain_text', text: project },
+      value: `project_${index + 1}`
+    }));
+    const projectInputBlock: SlackBlock =
+      projectOptions.length > 0
+        ? {
+            type: 'input',
+            block_id: 'projects_select_block',
+            optional: !env.PROJECT_TRACKING_REQUIRED,
+            element: {
+              type: 'multi_static_select',
+              action_id: 'projects_select',
+              options: projectOptions,
+              max_selected_items: env.MAX_PROJECTS_PER_DAY,
+              initial_options: projectOptions.filter((option) =>
+                params.existingProjects.includes(String((option.text as { text?: string }).text || ''))
+              )
+            },
+            label: { type: 'plain_text', text: 'Projects (max 3)' }
+          }
+        : {
+            type: 'input',
+            block_id: 'projects_text_block',
+            optional: !env.PROJECT_TRACKING_REQUIRED,
+            element: {
+              type: 'plain_text_input',
+              action_id: 'projects_text',
+              initial_value: params.existingProjects.join(', '),
+              placeholder: {
+                type: 'plain_text',
+                text: 'Comma separated projects (max 3)'
+              }
+            },
+            label: { type: 'plain_text', text: 'Projects (max 3)' }
+          };
 
     const view = {
       type: 'modal',
