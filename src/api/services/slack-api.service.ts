@@ -115,11 +115,10 @@ export class SlackApiService {
             .map((value) => value.trim())
             .filter(Boolean);
 
-    const projectOptions = optionsSource
-      .map((project) => ({
-        text: { type: 'plain_text', text: project },
-        value: project
-      }));
+    const projectOptions = optionsSource.map((project, index) => ({
+      text: { type: 'plain_text', text: project },
+      value: `project_${index + 1}`
+    }));
 
     const initial = params.existingProjects.join(', ');
     const projectInputBlock: SlackBlock =
@@ -134,7 +133,7 @@ export class SlackApiService {
               options: projectOptions,
               max_selected_items: env.MAX_PROJECTS_PER_DAY,
               initial_options: projectOptions.filter((option) =>
-                params.existingProjects.includes(String(option.value))
+                params.existingProjects.includes(String((option.text as { text?: string }).text || ''))
               )
             },
             label: { type: 'plain_text', text: 'Projects (max 3)' }

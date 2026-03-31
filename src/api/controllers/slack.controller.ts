@@ -279,6 +279,12 @@ export class SlackController {
       const multiSelected = action.selected_options;
       if (Array.isArray(multiSelected)) {
         for (const option of multiSelected) {
+          const text = (option as { text?: { text?: string } }).text?.text;
+          if (typeof text === 'string' && text.trim()) {
+            selectedProjects.push(text);
+            continue;
+          }
+
           const value = (option as { value?: string }).value;
           if (value) selectedProjects.push(value);
         }
