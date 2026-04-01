@@ -281,24 +281,26 @@ Analytics APIs:
 - Billing detail rows by employee and project: `GET /api/admin/analytics/projects`
   - Query supports either `month=YYYY-MM` or `from=YYYY-MM-DD&to=YYYY-MM-DD`.
   - Optional filters: `slackUserIds`, `projects`, `search`.
-  - Counts distinct days per `(employee, project)` only when attendance status is `WFO` or `WFH`.
+  - Counts weighted days per `(employee, project)` for statuses: `WFO`/`WFH` = `1`, `-0.5` = `0.5`.
   - Requires: `analytics:read`
-- Employee summary totals: `GET /api/admin/analytics/summary/employees`
-  - Returns total billable project-days per employee for the selected period.
+- Employee summary active days: `GET /api/admin/analytics/summary/employees`
+  - Returns active days per employee for the selected period (`WFO`/`WFH` = `1`, `-0.5` = `0.5`).
+  - Uses unique dates per employee (multiple projects on one date still count once for that date).
   - Requires: `analytics:read`
-- Project summary totals: `GET /api/admin/analytics/summary/projects`
-  - Returns total billable user-days per project for the selected period.
+- Project summary active days: `GET /api/admin/analytics/summary/projects`
+  - Returns active calendar days per project for the selected period.
+  - For a given project/date: if any user has `WFO`/`WFH`, day counts `1`; if only half-day entries exist, day counts `0.5`.
   - Requires: `analytics:read`
 - Project drill-down users: `GET /api/admin/analytics/projects/:projectName/users`
-  - Returns users and billable days worked on a specific project for the selected period.
+  - Returns users and weighted days worked on a specific project for the selected period.
   - Requires: `analytics:read`
 - User project totals: `GET /api/admin/analytics/users/:slackUserId/projects`
-  - Returns project day counts for one user in selected period.
+  - Returns project weighted day counts for one user in selected period (`WFO`/`WFH` = `1`, `-0.5` = `0.5`).
   - Requires: `analytics:read`
 
 Billing counting rule (current):
 
-- If a user has multiple projects on a day, each selected project is counted as `1` day for analytics.
+- If a user has multiple projects on a day, each selected project gets the full attendance weight for that date (`1` or `0.5`).
 
 Timer admin APIs:
 

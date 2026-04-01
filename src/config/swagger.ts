@@ -105,7 +105,7 @@ export function buildSwaggerSpec() {
               displayName: { type: 'string', nullable: true, example: 'Rahul Anand' },
               email: { type: 'string', nullable: true, example: 'rahul.anand@caw.tech' },
               projectName: { type: 'string', example: 'Aerchain' },
-              daysWorked: { type: 'integer', example: 12 }
+              daysWorked: { type: 'number', example: 11.5 }
             },
             required: ['slackUserId', 'displayName', 'email', 'projectName', 'daysWorked']
           },
@@ -113,7 +113,7 @@ export function buildSwaggerSpec() {
             type: 'object',
             properties: {
               projectName: { type: 'string', example: 'Aerchain' },
-              daysWorked: { type: 'integer', example: 12 }
+              daysWorked: { type: 'number', example: 11.5 }
             },
             required: ['projectName', 'daysWorked']
           },
@@ -123,17 +123,17 @@ export function buildSwaggerSpec() {
               slackUserId: { type: 'string', example: 'U0A5YQ63CMT' },
               displayName: { type: 'string', nullable: true, example: 'Rahul Anand' },
               email: { type: 'string', nullable: true, example: 'rahul.anand@caw.tech' },
-              totalDays: { type: 'integer', example: 22 }
+              activeDays: { type: 'number', example: 21.5 }
             },
-            required: ['slackUserId', 'displayName', 'email', 'totalDays']
+            required: ['slackUserId', 'displayName', 'email', 'activeDays']
           },
           AnalyticsProjectSummaryRow: {
             type: 'object',
             properties: {
               projectName: { type: 'string', example: 'Aerchain' },
-              totalDays: { type: 'integer', example: 45 }
+              activeDays: { type: 'number', example: 18.5 }
             },
-            required: ['projectName', 'totalDays']
+            required: ['projectName', 'activeDays']
           },
           AdminAuthUser: {
             type: 'object',
@@ -600,7 +600,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/analytics/projects': {
           get: {
-            summary: 'Billing detail rows by project and employee (WFO/WFH only)',
+            summary: 'Billing detail rows by project and employee (WFO/WFH/Half Day)',
             security: [{ bearerAuth: [] }],
             parameters: [
               {
@@ -675,7 +675,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/analytics/summary/employees': {
           get: {
-            summary: 'Employee summary total billable project-days',
+            summary: 'Employee summary active days (WFO/WFH=1, Half Day=0.5)',
             security: [{ bearerAuth: [] }],
             parameters: [
               { name: 'month', in: 'query', required: false, schema: { type: 'string', example: '2026-03' } },
@@ -725,7 +725,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/analytics/summary/projects': {
           get: {
-            summary: 'Project summary total billable user-days',
+            summary: 'Project summary active calendar days (Half Day-only dates count as 0.5)',
             security: [{ bearerAuth: [] }],
             parameters: [
               { name: 'month', in: 'query', required: false, schema: { type: 'string', example: '2026-03' } },
@@ -775,7 +775,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/analytics/users/{slackUserId}/projects': {
           get: {
-            summary: 'List project day counts for one user (WFO/WFH only)',
+            summary: 'List project day counts for one user (WFO/WFH=1, Half Day=0.5)',
             security: [{ bearerAuth: [] }],
             parameters: [
               {
@@ -839,7 +839,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/analytics/projects/{projectName}/users': {
           get: {
-            summary: 'List users who worked on a project in selected period (WFO/WFH only)',
+            summary: 'List users who worked on a project in selected period (WFO/WFH=1, Half Day=0.5)',
             security: [{ bearerAuth: [] }],
             parameters: [
               { name: 'projectName', in: 'path', required: true, schema: { type: 'string', example: 'Aerchain' } },
