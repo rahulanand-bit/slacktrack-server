@@ -38,28 +38,25 @@ export class ReminderService {
     }
 
     const recipients = await this.resolveReminderRecipients();
+    const shouldSendProjectReminder =
+      timer.timerType === 'evening' &&
+      env.ENABLE_PROJECT_TRACKING &&
+      env.PROJECT_MISSING_REMINDER_ENABLED &&
+      (env.PROJECT_TRACKING_REQUIRED || env.PROJECT_SPLIT_MODAL_ENABLED || env.PROJECT_SPLIT_CHAT_ENABLED);
+
     for (const slackUserId of recipients) {
-      if (timer.timerType === 'evening') {
-        const user = await this.userRepository.findBySlackId(slackUserId);
-        if (user) {
-          const hasAttendance = await this.attendanceRepository.hasAttendanceForDate(user.id, dateYmd);
-          if (hasAttendance) {
-            const shouldSendProjectReminder =
-              env.ENABLE_PROJECT_TRACKING &&
-              env.PROJECT_MISSING_REMINDER_ENABLED &&
-              (env.PROJECT_TRACKING_REQUIRED ||
-                env.PROJECT_SPLIT_MODAL_ENABLED ||
-                env.PROJECT_SPLIT_CHAT_ENABLED);
-
-            if (shouldSendProjectReminder) {
-              const hasProjects = await this.attendanceRepository.hasProjectsForDate(user.id, dateYmd);
-              if (!hasProjects) {
-                await this.slackApiService.sendProjectReminder(slackUserId, dateYmd);
-              }
+      const user = await this.userRepository.findBySlackId(slackUserId);
+      if (user) {
+        const hasAttendance = await this.attendanceRepository.hasAttendanceForDate(user.id, dateYmd);
+        if (hasAttendance) {
+          if (shouldSendProjectReminder) {
+            const hasProjects = await this.attendanceRepository.hasProjectsForDate(user.id, dateYmd);
+            if (!hasProjects) {
+              await this.slackApiService.sendProjectReminder(slackUserId, dateYmd);
             }
-
-            continue;
           }
+
+          continue;
         }
       }
 
