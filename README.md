@@ -148,6 +148,9 @@ curl -X POST http://localhost:8080/api/admin/sync/reconcile \
 - `GET /api/admin/attendance/month`
 - `GET /api/admin/attendance/users/:slackUserId/month`
 - `GET /api/admin/analytics/projects`
+- `GET /api/admin/analytics/summary/employees`
+- `GET /api/admin/analytics/summary/projects`
+- `GET /api/admin/analytics/projects/:projectName/users`
 - `GET /api/admin/analytics/users/:slackUserId/projects`
 - `GET /api/admin/timers`
 - `POST /api/admin/timers`
@@ -275,12 +278,27 @@ Attendance admin APIs:
 
 Analytics APIs:
 
-- Monthly project day counts by employee: `GET /api/admin/analytics/projects?month=YYYY-MM`
+- Billing detail rows by employee and project: `GET /api/admin/analytics/projects`
+  - Query supports either `month=YYYY-MM` or `from=YYYY-MM-DD&to=YYYY-MM-DD`.
+  - Optional filters: `slackUserIds`, `projects`, `search`.
   - Counts distinct days per `(employee, project)` only when attendance status is `WFO` or `WFH`.
   - Requires: `analytics:read`
-- Monthly project day counts for one user: `GET /api/admin/analytics/users/:slackUserId/projects?month=YYYY-MM`
-  - Counts distinct days per project only when attendance status is `WFO` or `WFH`.
+- Employee summary totals: `GET /api/admin/analytics/summary/employees`
+  - Returns total billable project-days per employee for the selected period.
   - Requires: `analytics:read`
+- Project summary totals: `GET /api/admin/analytics/summary/projects`
+  - Returns total billable user-days per project for the selected period.
+  - Requires: `analytics:read`
+- Project drill-down users: `GET /api/admin/analytics/projects/:projectName/users`
+  - Returns users and billable days worked on a specific project for the selected period.
+  - Requires: `analytics:read`
+- User project totals: `GET /api/admin/analytics/users/:slackUserId/projects`
+  - Returns project day counts for one user in selected period.
+  - Requires: `analytics:read`
+
+Billing counting rule (current):
+
+- If a user has multiple projects on a day, each selected project is counted as `1` day for analytics.
 
 Timer admin APIs:
 

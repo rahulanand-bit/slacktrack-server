@@ -77,3 +77,15 @@ export type UserProjectMonthlyStat = {
   projectName: string;
   daysWorked: number;
 };
+
+export type EmployeeSummaryStat = {
+  slackUserId: string;
+  displayName: string | null;
+  email: string | null;
+  totalDays: number;
+};
+
+export type ProjectSummaryStat = {
+  projectName: string;
+  totalDays: number;
+};

@@ -11,9 +11,24 @@ export function createAnalyticsRouter(controller: AnalyticsController): Router {
     asyncHandler(controller.listProjectMonthlyUserStats.bind(controller))
   );
   router.get(
+    '/analytics/summary/employees',
+    requirePermission('analytics:read'),
+    asyncHandler(controller.listEmployeeSummaryStats.bind(controller))
+  );
+  router.get(
+    '/analytics/summary/projects',
+    requirePermission('analytics:read'),
+    asyncHandler(controller.listProjectSummaryStats.bind(controller))
+  );
+  router.get(
     '/analytics/users/:slackUserId/projects',
     requirePermission('analytics:read'),
     asyncHandler(controller.listUserProjectMonthlyStats.bind(controller))
+  );
+  router.get(
+    '/analytics/projects/:projectName/users',
+    requirePermission('analytics:read'),
+    asyncHandler(controller.listProjectUsersStats.bind(controller))
   );
   return router;
 }

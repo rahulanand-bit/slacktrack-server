@@ -117,6 +117,24 @@ export function buildSwaggerSpec() {
             },
             required: ['projectName', 'daysWorked']
           },
+          AnalyticsEmployeeSummaryRow: {
+            type: 'object',
+            properties: {
+              slackUserId: { type: 'string', example: 'U0A5YQ63CMT' },
+              displayName: { type: 'string', nullable: true, example: 'Rahul Anand' },
+              email: { type: 'string', nullable: true, example: 'rahul.anand@caw.tech' },
+              totalDays: { type: 'integer', example: 22 }
+            },
+            required: ['slackUserId', 'displayName', 'email', 'totalDays']
+          },
+          AnalyticsProjectSummaryRow: {
+            type: 'object',
+            properties: {
+              projectName: { type: 'string', example: 'Aerchain' },
+              totalDays: { type: 'integer', example: 45 }
+            },
+            required: ['projectName', 'totalDays']
+          },
           AdminAuthUser: {
             type: 'object',
             properties: {
@@ -582,7 +600,7 @@ export function buildSwaggerSpec() {
         },
         '/api/admin/analytics/projects': {
           get: {
-            summary: 'List monthly project day counts by employee (WFO/WFH only)',
+            summary: 'Billing detail rows by project and employee (WFO/WFH only)',
             security: [{ bearerAuth: [] }],
             parameters: [
               {
@@ -590,11 +608,41 @@ export function buildSwaggerSpec() {
                 in: 'query',
                 required: false,
                 schema: { type: 'string', example: '2026-03' }
+              },
+              {
+                name: 'from',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03-01' }
+              },
+              {
+                name: 'to',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03-31' }
+              },
+              {
+                name: 'slackUserIds',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: 'U0A5YQ63CMT,U0AFS05CQD7' }
+              },
+              {
+                name: 'projects',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: 'Aerchain,Space' }
+              },
+              {
+                name: 'search',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: 'rahul' }
               }
             ],
             responses: {
               '200': {
-                description: 'Monthly project analytics rows',
+                description: 'Billing detail rows',
                 content: {
                   'application/json': {
                     schema: {
@@ -604,7 +652,13 @@ export function buildSwaggerSpec() {
                         data: {
                           type: 'object',
                           properties: {
-                            month: { type: 'string', example: '2026-03' },
+                            period: {
+                              type: 'object',
+                              properties: {
+                                from: { type: 'string', example: '2026-03-01' },
+                                to: { type: 'string', example: '2026-03-31' }
+                              }
+                            },
                             rows: {
                               type: 'array',
                               items: { $ref: '#/components/schemas/AnalyticsProjectUserRow' }
@@ -619,9 +673,109 @@ export function buildSwaggerSpec() {
             }
           }
         },
+        '/api/admin/analytics/summary/employees': {
+          get: {
+            summary: 'Employee summary total billable project-days',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              { name: 'month', in: 'query', required: false, schema: { type: 'string', example: '2026-03' } },
+              { name: 'from', in: 'query', required: false, schema: { type: 'string', example: '2026-03-01' } },
+              { name: 'to', in: 'query', required: false, schema: { type: 'string', example: '2026-03-31' } },
+              {
+                name: 'slackUserIds',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: 'U0A5YQ63CMT,U0AFS05CQD7' }
+              },
+              { name: 'projects', in: 'query', required: false, schema: { type: 'string', example: 'Aerchain,Space' } },
+              { name: 'search', in: 'query', required: false, schema: { type: 'string', example: 'rahul' } }
+            ],
+            responses: {
+              '200': {
+                description: 'Employee summary rows',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: {
+                          type: 'object',
+                          properties: {
+                            period: {
+                              type: 'object',
+                              properties: {
+                                from: { type: 'string', example: '2026-03-01' },
+                                to: { type: 'string', example: '2026-03-31' }
+                              }
+                            },
+                            rows: {
+                              type: 'array',
+                              items: { $ref: '#/components/schemas/AnalyticsEmployeeSummaryRow' }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/analytics/summary/projects': {
+          get: {
+            summary: 'Project summary total billable user-days',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              { name: 'month', in: 'query', required: false, schema: { type: 'string', example: '2026-03' } },
+              { name: 'from', in: 'query', required: false, schema: { type: 'string', example: '2026-03-01' } },
+              { name: 'to', in: 'query', required: false, schema: { type: 'string', example: '2026-03-31' } },
+              {
+                name: 'slackUserIds',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: 'U0A5YQ63CMT,U0AFS05CQD7' }
+              },
+              { name: 'projects', in: 'query', required: false, schema: { type: 'string', example: 'Aerchain,Space' } },
+              { name: 'search', in: 'query', required: false, schema: { type: 'string', example: 'rahul' } }
+            ],
+            responses: {
+              '200': {
+                description: 'Project summary rows',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: {
+                          type: 'object',
+                          properties: {
+                            period: {
+                              type: 'object',
+                              properties: {
+                                from: { type: 'string', example: '2026-03-01' },
+                                to: { type: 'string', example: '2026-03-31' }
+                              }
+                            },
+                            rows: {
+                              type: 'array',
+                              items: { $ref: '#/components/schemas/AnalyticsProjectSummaryRow' }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
         '/api/admin/analytics/users/{slackUserId}/projects': {
           get: {
-            summary: 'List monthly project day counts for one user (WFO/WFH only)',
+            summary: 'List project day counts for one user (WFO/WFH only)',
             security: [{ bearerAuth: [] }],
             parameters: [
               {
@@ -635,6 +789,18 @@ export function buildSwaggerSpec() {
                 in: 'query',
                 required: false,
                 schema: { type: 'string', example: '2026-03' }
+              },
+              {
+                name: 'from',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03-01' }
+              },
+              {
+                name: 'to',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: '2026-03-31' }
               }
             ],
             responses: {
@@ -649,11 +815,68 @@ export function buildSwaggerSpec() {
                         data: {
                           type: 'object',
                           properties: {
-                            month: { type: 'string', example: '2026-03' },
+                            period: {
+                              type: 'object',
+                              properties: {
+                                from: { type: 'string', example: '2026-03-01' },
+                                to: { type: 'string', example: '2026-03-31' }
+                              }
+                            },
                             slackUserId: { type: 'string', example: 'U0A5YQ63CMT' },
                             rows: {
                               type: 'array',
                               items: { $ref: '#/components/schemas/AnalyticsUserProjectRow' }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        '/api/admin/analytics/projects/{projectName}/users': {
+          get: {
+            summary: 'List users who worked on a project in selected period (WFO/WFH only)',
+            security: [{ bearerAuth: [] }],
+            parameters: [
+              { name: 'projectName', in: 'path', required: true, schema: { type: 'string', example: 'Aerchain' } },
+              { name: 'month', in: 'query', required: false, schema: { type: 'string', example: '2026-03' } },
+              { name: 'from', in: 'query', required: false, schema: { type: 'string', example: '2026-03-01' } },
+              { name: 'to', in: 'query', required: false, schema: { type: 'string', example: '2026-03-31' } },
+              {
+                name: 'slackUserIds',
+                in: 'query',
+                required: false,
+                schema: { type: 'string', example: 'U0A5YQ63CMT,U0AFS05CQD7' }
+              },
+              { name: 'search', in: 'query', required: false, schema: { type: 'string', example: 'rahul' } }
+            ],
+            responses: {
+              '200': {
+                description: 'Project user rows',
+                content: {
+                  'application/json': {
+                    schema: {
+                      type: 'object',
+                      properties: {
+                        ok: { type: 'boolean' },
+                        data: {
+                          type: 'object',
+                          properties: {
+                            period: {
+                              type: 'object',
+                              properties: {
+                                from: { type: 'string', example: '2026-03-01' },
+                                to: { type: 'string', example: '2026-03-31' }
+                              }
+                            },
+                            projectName: { type: 'string', example: 'Aerchain' },
+                            rows: {
+                              type: 'array',
+                              items: { $ref: '#/components/schemas/AnalyticsProjectUserRow' }
                             }
                           }
                         }
