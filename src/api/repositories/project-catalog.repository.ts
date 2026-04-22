@@ -36,13 +36,8 @@ export class ProjectCatalogRepository {
   }
 
   async createProject(name: string, active: boolean): Promise<ProjectCatalogRecord> {
-    const row = await prisma.project.upsert({
-      where: { name },
-      update: {
-        active,
-        updatedAt: new Date()
-      },
-      create: {
+    const row = await prisma.project.create({
+      data: {
         name,
         active
       }

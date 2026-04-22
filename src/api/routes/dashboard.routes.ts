@@ -10,5 +10,15 @@ export function createDashboardRouter(controller: DashboardController): Router {
     requirePermission('attendance:read'),
     asyncHandler(controller.getSummary.bind(controller))
   );
+  router.get(
+    '/dashboard/projectwise',
+    requirePermission('analytics:read'),
+    asyncHandler(controller.getProjectwise.bind(controller))
+  );
+  router.get(
+    '/dashboard/employeewise',
+    requirePermission('analytics:read'),
+    asyncHandler(controller.getEmployeewise.bind(controller))
+  );
   return router;
 }

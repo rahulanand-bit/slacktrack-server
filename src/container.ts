@@ -79,8 +79,13 @@ const sheetSyncService = new SheetSyncService(
   sheetWriter,
   jobPublisher
 );
-const dashboardService = new DashboardService(attendanceService, timerRepository, overrideAuditRepository);
 const analyticsService = new AnalyticsService(analyticsRepository);
+const dashboardService = new DashboardService(
+  attendanceService,
+  timerRepository,
+  overrideAuditRepository,
+  analyticsService
+);
 
 const slackController = new SlackController(attendanceService, chatService, projectCatalogService, slackApiService);
 const authController = new AuthController(authService);

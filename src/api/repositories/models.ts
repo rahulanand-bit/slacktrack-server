@@ -8,6 +8,8 @@ export type UserRecord = {
   displayName: string | null;
   email: string | null;
   isMessageEnabled: boolean;
+  active: boolean;
+  deactivatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -88,4 +90,58 @@ export type EmployeeSummaryStat = {
 export type ProjectSummaryStat = {
   projectName: string;
   activeDays: number;
+};
+
+export type StatusBreakdownStat = {
+  status: 'WFO' | 'WFH' | '-1' | '-0.5';
+  count: number;
+};
+
+export type AnalyticsOverviewStat = {
+  activeUsers: number;
+  presentCount: number;
+  pendingAttendance: number;
+  employeesOnLeave: number;
+  highLeaveEmployees: number;
+  wfhHeavyEmployees: number;
+  attendanceCompliancePct: number;
+};
+
+export type AnalyticsTrendRow = {
+  dateYmd: string;
+  wfoCount: number;
+  wfhCount: number;
+  leaveCount: number;
+  halfDayCount: number;
+  markedCount: number;
+};
+
+export type HighLeaveEmployeeRow = {
+  slackUserId: string;
+  displayName: string | null;
+  email: string | null;
+  leaveDays: number;
+};
+
+export type WfhHeavyEmployeeRow = {
+  slackUserId: string;
+  displayName: string | null;
+  email: string | null;
+  wfhDays: number;
+  presentDays: number;
+  wfhRatioPct: number;
+};
+
+export type WfoBaselineRow = {
+  slackUserId: string;
+  displayName: string | null;
+  email: string | null;
+  wfoDays: number;
+  meetsBaseline: boolean;
+};
+
+export type ProjectContributionRow = {
+  projectName: string;
+  activeDays: number;
+  sharePct: number;
 };

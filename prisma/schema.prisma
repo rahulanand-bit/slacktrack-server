@@ -13,6 +13,8 @@ model User {
   displayName      String?           @map("display_name")
   email            String?
   isMessageEnabled Boolean           @default(true) @map("is_message_enabled")
+  active           Boolean           @default(true)
+  deactivatedAt    DateTime?         @map("deactivated_at") @db.Timestamptz(6)
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime          @default(now()) @map("updated_at") @db.Timestamptz(6)
   attendance       AttendanceEntry[]

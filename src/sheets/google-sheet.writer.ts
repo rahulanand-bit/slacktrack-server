@@ -10,6 +10,10 @@ type Rgb = { red: number; green: number; blue: number };
 const HEADER_BG: Rgb = { red: 0.82, green: 0.82, blue: 0.82 };
 const WEEKEND_HEADER_BG: Rgb = { red: 0.94, green: 0.62, blue: 0.68 };
 const WEEKEND_BODY_BG: Rgb = { red: 0.99, green: 0.88, blue: 0.9 };
+const HOLIDAY_HEADER_BG: Rgb = { red: 0.86, green: 0.78, blue: 0.97 };
+const HOLIDAY_BODY_BG: Rgb = { red: 0.93, green: 0.9, blue: 0.99 };
+const LEAVE_BG: Rgb = { red: 1, green: 0.93, blue: 0.84 };
+const HALF_DAY_BG: Rgb = { red: 1, green: 0.97, blue: 0.82 };
 const BODY_BG: Rgb = { red: 1, green: 1, blue: 1 };
 
 const PROJECT_PALETTE: Rgb[] = [
@@ -256,9 +260,13 @@ export class GoogleSheetWriter implements SheetWriterPort {
       const date = monthStart.set({ day });
       const weekday = date.weekday;
       const dateYmd = date.toFormat('yyyy-LL-dd');
-      const isNonWorking = weekday === 6 || weekday === 7 || holidaySet.has(dateYmd);
+      const isWeekend = weekday === 6 || weekday === 7;
+      const isHoliday = holidaySet.has(dateYmd);
+      const isNonWorking = isWeekend || isHoliday;
       if (!isNonWorking) continue;
       const col = 3 + (day - 1);
+      const headerColor = isHoliday ? HOLIDAY_HEADER_BG : WEEKEND_HEADER_BG;
+      const bodyColor = isHoliday ? HOLIDAY_BODY_BG : WEEKEND_BODY_BG;
 
       requests.push({
         repeatCell: {
@@ -271,7 +279,7 @@ export class GoogleSheetWriter implements SheetWriterPort {
           },
           cell: {
             userEnteredFormat: {
-              backgroundColor: WEEKEND_HEADER_BG,
+              backgroundColor: headerColor,
               textFormat: { bold: true }
             }
           },
@@ -290,12 +298,44 @@ export class GoogleSheetWriter implements SheetWriterPort {
           },
           cell: {
             userEnteredFormat: {
-              backgroundColor: WEEKEND_BODY_BG
+              backgroundColor: bodyColor
             }
           },
           fields: 'userEnteredFormat.backgroundColor'
         }
       });
+    }
+
+    for (let i = 0; i < totalUsers; i++) {
+      const statusRowIndex = 1 + i * 2;
+      for (let day = 1; day <= daysInMonth; day++) {
+        const dateYmd = monthStart.set({ day }).toFormat('yyyy-LL-dd');
+        if (holidaySet.has(dateYmd)) {
+          continue;
+        }
+        const col = 3 + (day - 1);
+        const statusValue = values[statusRowIndex]?.[col] || '';
+        if (statusValue !== '-1' && statusValue !== '-0.5') {
+          continue;
+        }
+        requests.push({
+          repeatCell: {
+            range: {
+              sheetId,
+              startRowIndex: statusRowIndex,
+              endRowIndex: statusRowIndex + 1,
+              startColumnIndex: col,
+              endColumnIndex: col + 1
+            },
+            cell: {
+              userEnteredFormat: {
+                backgroundColor: statusValue === '-1' ? LEAVE_BG : HALF_DAY_BG
+              }
+            },
+            fields: 'userEnteredFormat.backgroundColor'
+          }
+        });
+      }
     }
 
     requests.push({

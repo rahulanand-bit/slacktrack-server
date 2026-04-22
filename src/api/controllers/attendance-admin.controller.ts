@@ -3,7 +3,8 @@ import type { Request, Response } from 'express';
 import { env } from '../../config/env';
 import {
   attendanceMonthQuerySchema,
-  attendanceQuerySchema
+  attendanceQuerySchema,
+  attendanceRangeQuerySchema
 } from '../schemas/attendance-admin.schema';
 import type { AttendanceService } from '../services/attendance.service';
 
@@ -32,6 +33,23 @@ export class AttendanceAdminController {
 
     const { month } = attendanceMonthQuerySchema.parse(req.query);
     const data = await this.attendanceService.getUserMonthlyAttendance(slackUserId, month);
+    if (!data) {
+      res.status(404).json({ ok: false, error: 'User not found' });
+      return;
+    }
+
+    res.status(200).json({ ok: true, data });
+  }
+
+  async getUserRangeAttendance(req: Request, res: Response): Promise<void> {
+    const slackUserId = String(req.params.slackUserId || '').trim();
+    if (!slackUserId) {
+      res.status(400).json({ ok: false, error: 'Invalid slack user id' });
+      return;
+    }
+
+    const { from, to } = attendanceRangeQuerySchema.parse(req.query);
+    const data = await this.attendanceService.getUserAttendanceRange(slackUserId, from, to);
     if (!data) {
       res.status(404).json({ ok: false, error: 'User not found' });
       return;

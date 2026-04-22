@@ -104,6 +104,8 @@ export class AttendanceService {
     month: string;
     dates: string[];
     nonWorkingDates: string[];
+    holidayDates: string[];
+    weekendDates: string[];
     users: Array<{
       slackUserId: string;
       name: string | null;
@@ -117,7 +119,7 @@ export class AttendanceService {
       this.userRepository.listUsers(),
       this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd)
     ]);
-    const nonWorkingDateSet = await this.buildNonWorkingDateSet(dates);
+    const nonWorkingDates = await this.buildNonWorkingDates(dates);
 
     const rowMap = new Map(
       snapshotRows.map((row) => [
@@ -129,7 +131,9 @@ export class AttendanceService {
     return {
       month: monthKey,
       dates,
-      nonWorkingDates: dates.filter((dateYmd) => nonWorkingDateSet.has(dateYmd)),
+      nonWorkingDates: nonWorkingDates.nonWorkingDates,
+      holidayDates: nonWorkingDates.holidayDates,
+      weekendDates: nonWorkingDates.weekendDates,
       users: users.map((user) => ({
         slackUserId: user.slackUserId,
         name: user.displayName,
@@ -158,6 +162,8 @@ export class AttendanceService {
     isMessageEnabled: boolean;
     month: string;
     nonWorkingDates: string[];
+    holidayDates: string[];
+    weekendDates: string[];
     days: Array<{ dateYmd: string; status: AttendanceValue | null; projects: string[] }>;
   } | null> {
     const user = await this.userRepository.findBySlackId(slackUserId);
@@ -165,7 +171,7 @@ export class AttendanceService {
 
     const { monthKey, fromDateYmd, toDateYmd, dates } = this.resolveMonthRange(month);
     const snapshotRows = await this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd);
-    const nonWorkingDateSet = await this.buildNonWorkingDateSet(dates);
+    const nonWorkingDates = await this.buildNonWorkingDates(dates);
     const userRows = snapshotRows.filter((row) => row.slackUserId === slackUserId);
     const rowMap = new Map(
       userRows.map((row) => [row.dateYmd, { status: row.status, projects: row.projects }])
@@ -177,7 +183,67 @@ export class AttendanceService {
       email: user.email,
       isMessageEnabled: user.isMessageEnabled,
       month: monthKey,
-      nonWorkingDates: dates.filter((dateYmd) => nonWorkingDateSet.has(dateYmd)),
+      nonWorkingDates: nonWorkingDates.nonWorkingDates,
+      holidayDates: nonWorkingDates.holidayDates,
+      weekendDates: nonWorkingDates.weekendDates,
+      days: dates.map((dateYmd) => {
+        const data = rowMap.get(dateYmd);
+        return {
+          dateYmd,
+          status: data?.status ?? null,
+          projects: data?.projects ?? []
+        };
+      })
+    };
+  }
+
+  async getUserAttendanceRange(
+    slackUserId: string,
+    fromDateYmd: string,
+    toDateYmd: string
+  ): Promise<{
+    slackUserId: string;
+    name: string | null;
+    email: string | null;
+    isMessageEnabled: boolean;
+    period: { from: string; to: string };
+    nonWorkingDates: string[];
+    holidayDates: string[];
+    weekendDates: string[];
+    days: Array<{ dateYmd: string; status: AttendanceValue | null; projects: string[] }>;
+  } | null> {
+    const user = await this.userRepository.findBySlackId(slackUserId);
+    if (!user) return null;
+
+    const from = DateTime.fromFormat(fromDateYmd, 'yyyy-LL-dd', { zone: env.TIMEZONE }).startOf('day');
+    const to = DateTime.fromFormat(toDateYmd, 'yyyy-LL-dd', { zone: env.TIMEZONE }).startOf('day');
+    if (!from.isValid || !to.isValid || to < from) {
+      throw new Error('Invalid range. Expected from/to in YYYY-MM-DD and to >= from.');
+    }
+
+    const dates: string[] = [];
+    let cursor = from;
+    while (cursor <= to) {
+      dates.push(cursor.toFormat('yyyy-LL-dd'));
+      cursor = cursor.plus({ days: 1 });
+    }
+
+    const snapshotRows = await this.attendanceRepository.listSnapshotRows(fromDateYmd, toDateYmd);
+    const nonWorkingDates = await this.buildNonWorkingDates(dates);
+    const userRows = snapshotRows.filter((row) => row.slackUserId === slackUserId);
+    const rowMap = new Map(
+      userRows.map((row) => [row.dateYmd, { status: row.status, projects: row.projects }])
+    );
+
+    return {
+      slackUserId: user.slackUserId,
+      name: user.displayName,
+      email: user.email,
+      isMessageEnabled: user.isMessageEnabled,
+      period: { from: fromDateYmd, to: toDateYmd },
+      nonWorkingDates: nonWorkingDates.nonWorkingDates,
+      holidayDates: nonWorkingDates.holidayDates,
+      weekendDates: nonWorkingDates.weekendDates,
       days: dates.map((dateYmd) => {
         const data = rowMap.get(dateYmd);
         return {
@@ -223,19 +289,32 @@ export class AttendanceService {
     return DateTime.now().setZone(env.TIMEZONE).toFormat('yyyy-LL-dd');
   }
 
-  private async buildNonWorkingDateSet(dates: string[]): Promise<Set<string>> {
+  private async buildNonWorkingDates(dates: string[]): Promise<{
+    nonWorkingDates: string[];
+    holidayDates: string[];
+    weekendDates: string[];
+  }> {
     const holidays = await this.holidayRepository.listAllDateYmd();
     const holidaySet = new Set(holidays);
-    const nonWorking = new Set<string>();
+    const nonWorking: string[] = [];
+    const holidayDates: string[] = [];
+    const weekendDates: string[] = [];
 
     for (const dateYmd of dates) {
       const isWeekend = DateTime.fromFormat(dateYmd, 'yyyy-LL-dd', { zone: env.TIMEZONE }).weekday >= 6;
-      if (isWeekend || holidaySet.has(dateYmd)) {
-        nonWorking.add(dateYmd);
+      const isHoliday = holidaySet.has(dateYmd);
+      if (isWeekend) {
+        weekendDates.push(dateYmd);
+      }
+      if (isHoliday) {
+        holidayDates.push(dateYmd);
+      }
+      if (isWeekend || isHoliday) {
+        nonWorking.push(dateYmd);
       }
     }
 
-    return nonWorking;
+    return { nonWorkingDates: nonWorking, holidayDates, weekendDates };
   }
 
   static validateProjects(projects: string[], maxProjects: number, required = env.PROJECT_TRACKING_REQUIRED): string[] {

@@ -13,6 +13,10 @@ export class ProjectCatalogController {
   async createProject(req: Request, res: Response): Promise<void> {
     const input = createProjectSchema.parse(req.body);
     const project = await this.projectCatalogService.createProject(input);
+    if (!project) {
+      res.status(409).json({ ok: false, error: 'Project name already exists' });
+      return;
+    }
     res.status(201).json({ ok: true, data: project });
   }
 

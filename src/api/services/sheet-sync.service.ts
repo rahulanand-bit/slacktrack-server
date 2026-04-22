@@ -25,7 +25,7 @@ export class SheetSyncService {
 
   async reconcile(reason: 'periodic' | 'manual'): Promise<void> {
     const now = DateTime.now().setZone(env.TIMEZONE);
-    const users = await this.userRepository.listUsers();
+    const users = await this.userRepository.listUsers({ includeInactive: true });
     const holidayDateYmds = await this.holidayRepository.listAllDateYmd();
 
     const months = [now.startOf('month'), now.plus({ months: 1 }).startOf('month')];

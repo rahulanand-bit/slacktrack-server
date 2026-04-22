@@ -14,6 +14,8 @@ function mapUserRecord(row: {
   displayName: string | null;
   email: string | null;
   isMessageEnabled: boolean;
+  active: boolean;
+  deactivatedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }): UserRecord {
@@ -23,6 +25,8 @@ function mapUserRecord(row: {
     displayName: row.displayName,
     email: row.email,
     isMessageEnabled: row.isMessageEnabled,
+    active: row.active,
+    deactivatedAt: row.deactivatedAt,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt
   };
@@ -30,18 +34,41 @@ function mapUserRecord(row: {
 
 export class UserRepository {
   async upsertBySlackId(slackUserId: string, displayName?: string): Promise<UserRecord> {
-    const user = await prisma.user.upsert({
-      where: { slackUserId },
-      update: {
-        displayName: displayName ?? undefined,
-        updatedAt: new Date()
-      },
-      create: {
+    const existing = await prisma.user.findUnique({ where: { slackUserId } });
+    if (existing) {
+      const user = await prisma.user.update({
+        where: { slackUserId },
+        data: {
+          displayName: displayName ?? existing.displayName,
+          active: true,
+          deactivatedAt: null,
+          updatedAt: new Date()
+        }
+      });
+      return mapUserRecord(user);
+    }
+
+    const created = await prisma.user.create({
+      data: {
         slackUserId,
-        displayName: displayName || null
+        displayName: displayName || null,
+        active: true
       }
     });
+    return mapUserRecord(created);
+  }
 
+  async createUser(input: CreateUserInput): Promise<UserRecord> {
+    const user = await prisma.user.create({
+      data: {
+        slackUserId: input.slackUserId,
+        displayName: input.displayName || null,
+        email: input.email || null,
+        isMessageEnabled: input.isMessageEnabled ?? true,
+        active: true,
+        deactivatedAt: null
+      }
+    });
     return mapUserRecord(user);
   }
 
@@ -52,16 +79,19 @@ export class UserRepository {
         displayName: input.displayName || null,
         email: input.email || null,
         isMessageEnabled: input.isMessageEnabled ?? true,
+        active: true,
+        deactivatedAt: null,
         updatedAt: new Date()
       },
       create: {
         slackUserId: input.slackUserId,
         displayName: input.displayName || null,
         email: input.email || null,
-        isMessageEnabled: input.isMessageEnabled ?? true
+        isMessageEnabled: input.isMessageEnabled ?? true,
+        active: true,
+        deactivatedAt: null
       }
     });
-
     return mapUserRecord(user);
   }
 
@@ -106,8 +136,43 @@ export class UserRepository {
     return mapUserRecord(user);
   }
 
+  async archiveBySlackId(slackUserId: string): Promise<UserRecord | null> {
+    const user = await prisma.user.findUnique({ where: { slackUserId } });
+    if (!user) return null;
+    const updated = await prisma.user.update({
+      where: { slackUserId },
+      data: {
+        active: false,
+        deactivatedAt: new Date(),
+        updatedAt: new Date()
+      }
+    });
+    return mapUserRecord(updated);
+  }
+
+  async restoreBySlackId(slackUserId: string): Promise<UserRecord | null> {
+    const user = await prisma.user.findUnique({ where: { slackUserId } });
+    if (!user) return null;
+    const updated = await prisma.user.update({
+      where: { slackUserId },
+      data: {
+        active: true,
+        deactivatedAt: null,
+        updatedAt: new Date()
+      }
+    });
+    return mapUserRecord(updated);
+  }
+
+  async findBySlackIdAndActive(slackUserId: string): Promise<UserRecord | null> {
+    const user = await prisma.user.findUnique({ where: { slackUserId } });
+    if (!user || !user.active) return null;
+    return mapUserRecord(user);
+  }
+
   async listAllSlackUserIds(): Promise<string[]> {
     const users = await prisma.user.findMany({
+      where: { active: true },
       orderBy: { id: 'asc' },
       select: { slackUserId: true }
     });
@@ -117,7 +182,7 @@ export class UserRepository {
 
   async listMessageEnabledSlackUserIds(): Promise<string[]> {
     const users = await prisma.user.findMany({
-      where: { isMessageEnabled: true },
+      where: { isMessageEnabled: true, active: true },
       orderBy: { id: 'asc' },
       select: { slackUserId: true }
     });
@@ -125,8 +190,9 @@ export class UserRepository {
     return users.map((row) => row.slackUserId);
   }
 
-  async listUsers(): Promise<UserRecord[]> {
+  async listUsers(options?: { includeInactive?: boolean }): Promise<UserRecord[]> {
     const users = await prisma.user.findMany({
+      where: options?.includeInactive ? undefined : { active: true },
       orderBy: [{ displayName: 'asc' }, { slackUserId: 'asc' }]
     });
 

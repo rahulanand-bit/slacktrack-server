@@ -15,6 +15,13 @@ export const bulkCreateUserSchema = z.object({
   users: z.array(createUserSchema).min(1).max(500)
 });
 
+export const listUsersQuerySchema = z.object({
+  includeInactive: z
+    .union([z.literal('true'), z.literal('false')])
+    .optional()
+    .transform((value) => value === 'true')
+});
+
 export const updateUserSchema = z
   .object({
     name: z.string().trim().min(1).optional(),

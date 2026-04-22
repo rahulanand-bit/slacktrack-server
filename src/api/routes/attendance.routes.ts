@@ -20,5 +20,10 @@ export function createAttendanceRouter(controller: AttendanceAdminController): R
     requirePermission('attendance:read'),
     asyncHandler(controller.getUserMonthlyAttendance.bind(controller))
   );
+  router.get(
+    '/attendance/users/:slackUserId/range',
+    requirePermission('attendance:read'),
+    asyncHandler(controller.getUserRangeAttendance.bind(controller))
+  );
   return router;
 }

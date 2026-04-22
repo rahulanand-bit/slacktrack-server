@@ -20,6 +20,16 @@ export function createUserRouter(controller: UserAdminController): Router {
     requirePermission('users:write'),
     asyncHandler(controller.deactivateMessaging.bind(controller))
   );
+  router.patch(
+    '/users/:slackUserId/archive',
+    requirePermission('users:write'),
+    asyncHandler(controller.archiveUser.bind(controller))
+  );
+  router.patch(
+    '/users/:slackUserId/restore',
+    requirePermission('users:write'),
+    asyncHandler(controller.restoreUser.bind(controller))
+  );
 
   return router;
 }

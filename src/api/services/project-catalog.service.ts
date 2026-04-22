@@ -1,6 +1,7 @@
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
 import type { Redis } from 'ioredis';
+import { Prisma } from '@prisma/client';
 import type { ProjectCatalogRecord } from '../repositories/models';
 import type { ProjectCatalogRepository } from '../repositories/project-catalog.repository';
 
@@ -16,10 +17,17 @@ export class ProjectCatalogService {
     return this.projectCatalogRepository.listProjects();
   }
 
-  async createProject(input: { name: string; active?: boolean }): Promise<ProjectCatalogRecord> {
-    const project = await this.projectCatalogRepository.createProject(input.name.trim(), input.active ?? true);
-    await this.invalidateActiveProjectsCache();
-    return project;
+  async createProject(input: { name: string; active?: boolean }): Promise<ProjectCatalogRecord | null> {
+    try {
+      const project = await this.projectCatalogRepository.createProject(input.name.trim(), input.active ?? true);
+      await this.invalidateActiveProjectsCache();
+      return project;
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        return null;
+      }
+      throw error;
+    }
   }
 
   async updateProject(
